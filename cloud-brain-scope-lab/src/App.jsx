@@ -79,6 +79,25 @@ function shortTargetLabel(url) {
   }
 }
 
+/**
+ * Parse a fetch Response body as JSON. If the server returned HTML (common when
+ * the Express API is down and Vite falls through to index.html), throw a clear error.
+ */
+async function parseFetchJson(res) {
+  const text = await res.text();
+  const trimmed = text.trim();
+  if (!trimmed) return {};
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const looksHtml = /^<!DOCTYPE\s|^<\s*html[\s>]/i.test(trimmed);
+    const hint = looksHtml
+      ? 'API returned HTML instead of JSON — start the backend (`npm run server` or `npm run dev` in cloud-brain-scope-lab) so port 5000 serves /api and Vite proxies /api to it.'
+      : 'Response was not valid JSON.';
+    throw new Error(hint);
+  }
+}
+
 function PlanWidget({
   plan,
   approved,
@@ -845,7 +864,7 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ policyUrl: url, model, profile, browse })
       });
-      const data = await res.json();
+      const data = await parseFetchJson(res);
       if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
 
       const discussionMsgs = (data.discussion || []).map((d) => ({
@@ -919,7 +938,7 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ policyUrl: url, profile, browse })
       });
-      const data = await res.json();
+      const data = await parseFetchJson(res);
       if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
 
       const candidates = data.candidateTargets || [];
@@ -1003,7 +1022,7 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ planId, includeHostPatterns: true })
       });
-      const data = await res.json();
+      const data = await parseFetchJson(res);
       if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
 
       setSurfaceResults((prev) => ({ ...prev, [planId]: data }));
@@ -1110,7 +1129,9 @@ export default function App() {
       });
 
       if (!res.ok) {
-        const errData = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        const errData = await parseFetchJson(res).catch((e) => ({
+          error: e?.message || `HTTP ${res.status}`
+        }));
         throw new Error(errData.error || `HTTP ${res.status}`);
       }
 
