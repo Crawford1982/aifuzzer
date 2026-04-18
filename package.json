@@ -1,0 +1,15 @@
+{
+  "name": "mythos-fuzzer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Mythos-style AI fuzzer framework — build in layers, ship a working slice first",
+  "type": "module",
+  "scripts": {
+    "start": "node src/main.js",
+    "mythos": "node src/main.js",
+    "test:scope-lab-agent": "node scripts/test-scope-lab-adapter.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

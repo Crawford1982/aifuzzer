@@ -1,0 +1,42 @@
+{
+  "_comment": "Reference summary for Dynatrace on HackerOne — always follow the live policy page.",
+  "policyUrlExample": "https://hackerone.com/dynatrace/policy_scopes",
+  "automatedHttpFuzz": {
+    "allowedHostSuffixes": [
+      ".dynatrace.com",
+      ".dynatrace.cloud",
+      ".dynatracelabs.com"
+    ],
+    "blockedForAutomatedProbing": [
+      "github.com",
+      "gist.github.com",
+      "raw.githubusercontent.com"
+    ],
+    "note": "GitHub findings may still be in scope only for listed repos under github.com/Dynatrace — this tool does not HTTP-fuzz GitHub."
+  },
+  "githubReposInScopeIfTestingGitHubManually": [
+    "OneAgent-Ansible",
+    "configuration-as-code",
+    "configuration-as-code-core",
+    "dynatrace-operator",
+    "dynatrace-otel-collector",
+    "heroku-buildpack-dynatrace",
+    "backstage-plugin",
+    "swift-mobile-sdk",
+    "dynatrace-bootstrapper",
+    "OneAgent-SDK-for-Java",
+    "openkit-js",
+    "agent-nodejs",
+    "Log-Security-Rules-Checker"
+  ],
+  "labsExamplesFromPolicy": {
+    "sso": "sso-sprint.dynatracelabs.com",
+    "myaccount": "myaccount-hardening.dynatracelabs.com",
+    "legacyAccountPortal": "account-sprint.dynatracelabs.com",
+    "internalApiSpec": "https://api-hardening.internal.dynatracelabs.com/spec/",
+    "sprintGen2Wildcard": "*.sprint.dynatracelabs.com",
+    "sprintGen3Wildcard": "*.sprint.apps.dynatracelabs.com",
+    "restApiDocHint": "<environment-id>.sprint.dynatracelabs.com/rest-api-doc/index.jsp",
+    "swaggerHint": "<environment-id>.sprint.apps.dynatracelabs.com/platform/swagger-ui/index.html"
+  }
+}
