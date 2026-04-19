@@ -2,9 +2,7 @@
 
 Single source of truth for **delivery phases** and **exit criteria**. Implementation details live in code; this file tracks **what “done” means**.
 
-**Last regression:** run `npm test` (includes plan, OpenAPI load, dependency graph, mocked stateful chain, mocked LLM planner). All green as of repo pushes to `main`.
-
-**Tests (regression):** `npm test` → `test:plan`, `test:openapi`, `test:graph`, `test:chains`. Optional: `test:llm-plan` (mocked API, no key). Milestone **B** is considered done when those pass (chains = stateful binding proof).
+**Tests (regression):** `npm test` → `test:plan`, `test:openapi`, `test:graph`, `test:chains`, `test:llm-plan` (all offline; no API keys). **Milestones A–C** on `main` are expected to pass this suite on every push. **B** in particular is covered by `test:chains` (stateful binding). **C** is covered by `test:llm-plan` (planner + `validatePlan` with mocked provider).
 
 ---
 
