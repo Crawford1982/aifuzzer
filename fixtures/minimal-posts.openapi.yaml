@@ -1,0 +1,32 @@
+openapi: 3.0.3
+info:
+  title: Minimal YAML smoke
+  version: "1"
+servers:
+  - url: https://jsonplaceholder.typicode.com
+paths:
+  /posts:
+    get:
+      operationId: yamlListPosts
+      summary: List posts
+    post:
+      operationId: yamlCreatePost
+      summary: Create post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                userId: { type: integer }
+  /posts/{id}:
+    get:
+      operationId: yamlGetPost
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            example: 1

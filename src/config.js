@@ -10,6 +10,9 @@ export function parseArgv(argv) {
     maxRequests: 120,
     timeoutMs: 8000,
     outputDir: 'output',
+    openapiPath: null,
+    useStubPlan: false,
+    planWithLlm: false,
     help: false,
   };
 
@@ -22,6 +25,9 @@ export function parseArgv(argv) {
     else if (a === '--max-requests') args.maxRequests = Number(argv[++i]);
     else if (a === '--timeout-ms') args.timeoutMs = Number(argv[++i]);
     else if (a === '--output-dir') args.outputDir = argv[++i];
+    else if (a === '--openapi') args.openapiPath = argv[++i];
+    else if (a === '--stub-plan') args.useStubPlan = true;
+    else if (a === '--plan-with-llm') args.planWithLlm = true;
   }
 
   return args;

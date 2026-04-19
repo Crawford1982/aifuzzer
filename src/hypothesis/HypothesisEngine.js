@@ -2,7 +2,17 @@
  * Layer 3 — Hypothesis generation (pattern-driven for v0.1)
  */
 
-/** @typedef {{ id: string, method: string, url: string, headers: Record<string,string>, omitAuth?: boolean, family: string, meta?: Record<string, unknown> }} FuzzCase */
+/**
+ * @typedef {{
+ *   id: string,
+ *   method: string,
+ *   url: string,
+ *   headers: Record<string,string>,
+ *   omitAuth?: boolean,
+ *   family: string,
+ *   meta?: { query?: Record<string, string>, jsonBody?: unknown, contentType?: string },
+ * }} FuzzCase
+ */
 
 const ID_VALUES = [1, 2, 3, 10, 42, 99, 1000, 'admin', 'root', '00000000-0000-0000-0000-000000000001'];
 

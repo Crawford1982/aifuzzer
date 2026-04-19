@@ -60,18 +60,19 @@ That means, without you hand-writing endpoints or payloads:
 
 ## Where this repo is now (honest snapshot)
 
-| Layer | Vision | Today (v0.1 codebase) |
-|-------|--------|-------------------------|
-| Target input | Paste URL only | **You pass `--target`** (required). Optional `--auth`. |
-| Surface RECON | Rich discovery | **REST slice:** a few derived paths + your URL / `{id}` templates. |
-| Deep analysis | Static/dynamic depth | **Not implemented.** |
-| Semantic graph | Real model | **Stub** (`SemanticModel`): stores observations, no inference. |
-| Hypothesis engine | AI / constraints | **Fixed patterns only** (ID swaps, debug params, optional auth probes). **No LLM.** |
-| Multi-agent orchestrator | Many agents | **Single pipeline**, one HTTP executor. |
-| Feedback & adaptation | Coverage / novelty / learning | **Dedup/novelty stub only.** |
-| Verification / exploit reasoning | Weaponized PoCs | **Heuristic triage** (`BasicTriage`), manual follow-up assumed. |
+| Layer | Vision | Today (this repo) |
+|-------|--------|----------------------|
+| Target input | Paste URL | CLI: **`--target`**, optional **`--openapi`**, optional **`--stub-plan`**, `--auth`. |
+| Surface | Rich discovery | **REST slice** + **OpenAPI 3 JSON/YAML** normalization. |
+| Deep / state | Static + live API truth | **Producer→consumer graph** (heuristic) + **sequential chains** with **live `id` binding** (list→item, create→item). **No LLM.** |
+| Semantic graph | Real model | **Stub** (`SemanticModel`): observations only. |
+| Hypotheses | AI + rules | **Deterministic:** pattern mode, spec expansion, stateful campaigns, **typed `ExecutionPlan` + compiler**; **stub planner** only. |
+| Orchestrator | Many agents | **One pipeline**; chains run **sequentially**, flat spec cases **pooled**. |
+| Feedback | Learning | **Novelty index** (light). |
+| Verification | Provable | **Heuristic triage** + per-row **`replayCurl`**. |
+| Tests | CI | **`npm test`**: plan schema, OpenAPI load, dependency graph, **mocked `post_to_item` chain** (no network). |
 
-**Bottom line:** You can plug in a URL and the tool **runs a bounded, pattern-based campaign** and writes a JSON report. **AI does not “take over” yet**—there is no API key, no model calls, no automatic endpoint discovery beyond simple probes.
+**Bottom line:** The **engine and proof plumbing** (spec, graph, bind, validate plan, execute, replay) are in place. **Milestone C** = add a **bounded LLM** that only fills `ExecutionPlan` (plus redaction, retries, and no direct `fetch` in the planner module).
 
 ---
 

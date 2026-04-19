@@ -11,13 +11,27 @@ import path from 'path';
 
 /**
  * @param {FuzzCase[]} cases
- * @param {{ concurrency: number, timeoutMs: number, authHeader?: string | null }} opts
+ * @param {{ concurrency: number, timeoutMs: number, authHeader?: string | null, captureFullBody?: boolean }} opts
  */
 export async function executeCases(cases, opts) {
   const results = await runPool(cases, opts.concurrency, (c) => runOne(c, opts));
   return results;
 }
 
+/**
+ * Single request (for stateful chains). Same transport rules as concurrent pool.
+ *
+ * @param {FuzzCase} c
+ * @param {{ timeoutMs: number, authHeader?: string | null, captureFullBody?: boolean }} opts
+ */
+export async function executeOne(c, opts) {
+  return runOne(c, opts);
+}
+
+/**
+ * @param {FuzzCase} c
+ * @param {{ timeoutMs: number, authHeader?: string | null, captureFullBody?: boolean }} opts
+ */
 async function runOne(c, opts) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), opts.timeoutMs);
@@ -38,6 +52,18 @@ async function runOne(c, opts) {
     url = u.toString();
   }
 
+  /** @type {string | undefined} */
+  let body;
+  if (c.meta && c.meta.jsonBody !== undefined) {
+    body =
+      typeof c.meta.jsonBody === 'string'
+        ? c.meta.jsonBody
+        : JSON.stringify(c.meta.jsonBody);
+    if (!headers['Content-Type'] && !headers['content-type']) {
+      headers['Content-Type'] = c.meta.contentType || 'application/json';
+    }
+  }
+
   const started = Date.now();
   try {
     const res = await fetch(url, {
@@ -45,19 +71,23 @@ async function runOne(c, opts) {
       headers,
       redirect: 'manual',
       signal: ctrl.signal,
+      ...(body !== undefined ? { body } : {}),
     });
     const bodyText = await res.text();
     clearTimeout(t);
     const elapsed = Date.now() - started;
 
+    const cap = Boolean(opts.captureFullBody);
     return {
       caseId: c.id,
       family: c.family,
+      method: c.method || 'GET',
       url,
       status: res.status,
       elapsedMs: elapsed,
       headers: sanitizeHeaders(Object.fromEntries(res.headers)),
       bodyPreview: bodyText.slice(0, 1200),
+      ...(cap ? { fullBody: bodyText } : {}),
       bodyBytes: Buffer.byteLength(bodyText, 'utf8'),
       error: null,
     };
@@ -66,6 +96,7 @@ async function runOne(c, opts) {
     return {
       caseId: c.id,
       family: c.family,
+      method: c.method || 'GET',
       url: c.url,
       status: null,
       elapsedMs: Date.now() - started,

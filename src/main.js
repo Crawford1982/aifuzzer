@@ -8,15 +8,27 @@ import { resolveTargetUrl } from './util/resolveTargetUrl.js';
 
 function printHelp() {
   console.log(`
-Mythos fuzzer v0.1 — authorized testing only.
+Mythos fuzzer — authorized testing only.
 
 Usage:
+  npm start -- --target <base-url> [--openapi <spec.json|yaml>] [--stub-plan]
   npm start -- --target <url> [--auth <token>] [--concurrency N] [--max-requests N]
   npm start                       # interactive mode
 
+OpenAPI mode:
+  --openapi path/to/openapi.yaml   Spec-driven cases (JSON or YAML). --target is the API base URL
+                                   (overrides servers[0] when provided).
+Stub typed plan (compiler + executor smoke, no LLM):
+  --stub-plan                      Emit fixed multi-step plan from stubPlanner.js (still needs --target).
+
+Bounded LLM planner (Milestone C — requires API key in env):
+  --plan-with-llm                 With --openapi: ask LLM for one ExecutionPlan, validate, run a capped slice,
+                                   then continue with stateful chains + flat expansion. Uses MYTHOS_LLM_* env vars.
+
 Examples:
+  npm start -- --target "https://jsonplaceholder.typicode.com" --openapi ./spec/openapi.json
+  npm start -- --target "https://jsonplaceholder.typicode.com" --stub-plan
   npm start -- --target "https://jsonplaceholder.typicode.com/posts/{id}"
-  npm start -- --target "https://jsonplaceholder.typicode.com/posts/1"
 
 Requires Node.js 18+ (global fetch).
 `);
@@ -103,6 +115,11 @@ async function main() {
     process.exit(0);
   }
 
+  if (args.planWithLlm && !args.openapiPath) {
+    console.error('Error: --plan-with-llm requires --openapi <spec.json|yaml>');
+    process.exit(1);
+  }
+
   const defaults = {
     concurrency: Number.isFinite(args.concurrency) ? args.concurrency : 4,
     maxRequests: Number.isFinite(args.maxRequests) ? args.maxRequests : 120,
@@ -114,6 +131,9 @@ async function main() {
     ? {
         target: args.target,
         auth: args.auth || null,
+        openapiPath: args.openapiPath,
+        useStubPlan: args.useStubPlan,
+        planWithLlm: args.planWithLlm,
         ...defaults,
       }
     : await promptConfig(defaults);
@@ -132,6 +152,9 @@ async function main() {
     maxRequests: config.maxRequests,
     timeoutMs: config.timeoutMs,
     outputDir: config.outputDir,
+    openapiPath: config.openapiPath || null,
+    useStubPlan: Boolean(config.useStubPlan),
+    planWithLlm: Boolean(config.planWithLlm),
   });
 
   console.log(`\nReport written: ${outfile}`);

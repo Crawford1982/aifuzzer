@@ -25,15 +25,18 @@ This is the **target** shape. The code in `src/` names the same layers so you ca
 
 ## What exists in code (truth table)
 
-| Layer | Module prefix | Status (v0.1) |
-|-------|----------------|----------------|
-| Surface reconnaissance | `src/surface/` | REST only: probes + templated `{id}` URLs |
-| Semantic understanding | `src/semantic/` | Stub graph: stores nodes/edges and observations |
-| Hypothesis generation | `src/hypothesis/` | Pattern library + expand to concrete HTTP cases |
-| Multi-agent orchestration | `src/orchestrator/` | Single pipeline (not concurrent agents yet) |
-| Execution | `src/execution/` | HTTP agent with concurrency pool |
-| Feedback | `src/feedback/` | Dedup + novelty score stub |
-| Verification | `src/verify/` | Heuristic triage (not proof of exploitability) |
+| Layer | Module prefix | Status |
+|-------|----------------|--------|
+| Surface reconnaissance | `src/surface/` | REST probes + templated `{id}` URLs |
+| OpenAPI ingestion | `src/openapi/` | JSON/YAML → normalized operations |
+| Stateful inference | `src/state/` | Producer→consumer edges + JSON id extraction |
+| Semantic understanding | `src/semantic/` | Observation log (minimal) |
+| Hypothesis generation | `src/hypothesis/` | Patterns, OpenAPI cases, small stateful chains |
+| Typed execution plans | `src/planner/` | Schema + compiler + stub planner |
+| Orchestration | `src/orchestrator/` | Single pipeline (chains sequential; flat cases pooled) |
+| Execution | `src/execution/` | Concurrent pool + `SequenceExecutor` for binds |
+| Feedback | `src/feedback/` | Novelty index stub |
+| Verification | `src/verify/` | Heuristic triage + replay `curl` strings |
 
 ## Interfaces (contracts to preserve)
 

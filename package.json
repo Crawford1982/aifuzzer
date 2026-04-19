@@ -7,9 +7,18 @@
   "scripts": {
     "start": "node src/main.js",
     "mythos": "node src/main.js",
-    "test:scope-lab-agent": "node scripts/test-scope-lab-adapter.mjs"
+    "test:scope-lab-agent": "node scripts/test-scope-lab-adapter.mjs",
+    "test:plan": "node scripts/verify-plan.mjs",
+    "test:openapi": "node scripts/test-openapi-load.mjs",
+    "test:graph": "node scripts/test-dependency-graph.mjs",
+    "test:chains": "node scripts/test-chains.mjs",
+    "test:llm-plan": "node scripts/test-llm-planner.mjs",
+    "test": "npm run test:plan && npm run test:openapi && npm run test:graph && npm run test:chains && npm run test:llm-plan"
   },
   "engines": {
     "node": ">=18"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.0"
   }
 }

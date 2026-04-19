@@ -4,15 +4,17 @@ This repository is a **framework-shaped** security research tool: the same **lay
 
 **Non-negotiable:** only use on systems you are **authorized** to test.
 
-## What runs today (v0.1)
+## What runs today (core CLI)
 
-- **Layer: Surface (REST only)** — probe a small set of paths, record status, size, headers.
-- **Layer: Semantic graph** — minimal in-memory stub (stores observations; no inference yet).
-- **Layer: Hypotheses** — pattern-driven candidate tests (IDOR-ish path swaps, missing auth replay, debug query params)—not LLM-generated.
-- **Orchestrator** — wires surface → hypotheses → concurrent HTTP execution → naive triage.
-- **Output** — JSON report under `./output/` (timestamped).
+- **Surface** — light path probes; status, size, content-type.
+- **OpenAPI** — optional `--openapi` (JSON or YAML): spec-driven cases + `dependencyGraph` in the report.
+- **Stateful chains (Milestone B)** — heuristics find `list → item` (and `create → item` when POST exists on the collection); the engine runs **sequential** steps and binds a real `id` from the first response into the second request. No LLM.
+- **Typed plans** — `--stub-plan` compiles a fixed `ExecutionPlan` through the same path as a future LLM planner (validate → `FuzzCase` → execute).
+- **Hypotheses** — pattern mode (no spec) or spec mode; both are deterministic.
+- **Verification (light)** — heuristics + per-row **`replayCurl`** in the report.
+- **Output** — JSON under `./output/` (gitignored). Large `fullBody` capture is used in-memory for binding only, not stored in the report.
 
-No LLM, no binary/protocol agents, no exploit generation.
+`cloud-brain-scope-lab/` is a separate UI/scope experiment; the **fuzzer engine** is the `src/` tree + `npm start`.
 
 ## Requirements
 
@@ -36,19 +38,50 @@ npm start -- --target "https://api.example.com/me" --auth "YOUR_TOKEN"
 
 # Tune concurrency / cap
 npm start -- --target "URL" --concurrency 3 --max-requests 80
+
+# OpenAPI-driven (JSON or YAML)
+npm start -- --target "https://jsonplaceholder.typicode.com" --openapi ./fixtures/minimal-posts.openapi.json
+
+# Stub typed plan (compiler smoke; needs same base as paths in stubPlanner.js)
+npm start -- --target "https://jsonplaceholder.typicode.com" --stub-plan
+
+# Tests (no network for default suite)
+npm test
 ```
+
+## Testing
+
+| Script | What it checks |
+|--------|------------------|
+| `npm test` | Full suite below (CI-friendly, default **no outbound HTTP**). |
+| `npm run test:plan` | Stub `ExecutionPlan` validates and compiles to `FuzzCase`s. |
+| `npm run test:openapi` | Fixture **JSON + YAML** loads and normalizes. |
+| `npm run test:graph` | `fixtures/minimal-posts.openapi.json` yields **list→item** and **POST→item** edges. |
+| `npm run test:chains` | Mocked `fetch`: **POST `/posts`** → `{ id }` → **GET `/posts/{id}`** (offline). |
+| `npm run test:llm-plan` | Mocked chat completions — **`llmPlanner`** → **`validatePlan`** (offline). |
+| `npm run test:scope-lab-agent` | Optional integration with `cloud-brain-scope-lab` adapter (hits **jsonplaceholder** unless modified). |
+
+Fixtures live under **`fixtures/`** — `minimal-posts.openapi.json` includes **`POST /posts`** (`createPost`) alongside list/get routes for **`post_to_item`** chains.
+
+**Milestone reference:** [`docs/MILESTONES.md`](docs/MILESTONES.md).
+
+**LLM planning (live API):** set `MYTHOS_LLM_API_KEY`, then e.g.  
+`npm start -- --target "https://jsonplaceholder.typicode.com" --openapi ./fixtures/minimal-posts.openapi.json --plan-with-llm`
 
 ## Repo layout
 
 ```
 src/
   surface/       # Layer 1 (REST slice)
-  semantic/      # Layer 2 (stub graph)
-  hypothesis/    # Layer 3 (pattern engine)
-  orchestrator/  # Layer 4 (single coordinator for now)
-  execution/     # HTTP fuzz agent
+  openapi/       # Spec load + normalize
+  state/         # Dependency edges + JSON handle extract
+  semantic/      # Layer 2 (observations stub)
+  hypothesis/    # Patterns, OpenAPI expansion, stateful campaigns
+  planner/       # Typed execution plans (stub; LLM later)
+  orchestrator/  # Pipeline
+  execution/     # HTTP pool + sequential chains
   feedback/      # Response novelty / indexing
-  verify/        # Basic triage
+  verify/        # Triage + replay curl evidence
 docs/
   ARCHITECTURE.md
   ROADMAP.md
