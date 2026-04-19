@@ -2,7 +2,7 @@
 
 Single source of truth for **delivery phases** and **exit criteria**. Implementation details live in code; this file tracks **what “done” means**.
 
-**Tests (regression):** `npm test` — see `package.json` (offline; no API keys). **A–D** on `main` are expected to pass on every push. **B** is `test:chains`. **C** is `test:llm-plan`. **D** is `test:milestone-d`, `test:scope-policy`, `test:evidence-export`. Optional live LLM: `MYTHOS_E2E_LLM=1 npm run test:llm-e2e`.
+**Tests (regression):** `npm test` — see `package.json` (offline; no API keys). **A–F** on `main` are expected to pass. **F** adds `test:checker-engine`, `test:body-mutations`, `test:wordlist-expand`. Optional live LLM: `MYTHOS_E2E_LLM=1 npm run test:llm-e2e`.
 
 ---
 
@@ -77,9 +77,26 @@ Single source of truth for **delivery phases** and **exit criteria**. Implementa
 
 ---
 
-## Milestone E — Ops & memory (after D)
+## Milestone F — Checker oracles & bounty-shaped signals
 
-**Queues (Redis), vector memory, CI profile** — only after **D** proves signal quality.
+**Goal:** Named bug buckets (RESTler-style **architecture**, Mythos implementations), deterministic matchers, bounded expansion — **LLMs stay downstream** of checkers.
+
+**Done when:**
+
+- [x] **Checker registry** — `checkerRegistry.js`: `checkerId`, precondition text, OWASP mapping, bounty tier hint; report includes **`checkerRegistry`** + **`checkersFired`** with evidence case IDs + optional HAR path hint.
+- [x] **Invariant checkers** — create/list leakage (4xx mutating → list still populated), delete→GET still readable, hierarchy / identical body across parents (`invariantCheckers.js`).
+- [x] **Bounty battery** — `data/bounty-signals.json`: regex/status matchers on **response previews only** (`bountyBattery.js`).
+- [x] **OWASP mapping artifact** — `data/owasp-api-mapping.json` (reference links to themes, not full OWASP text).
+- [x] **Optional wordlist path injection** — `--wordlist` + caps (`--max-wordlist-injections`, hard ceiling in expander).
+- [x] **Schema-aware body mutations** — omit required / wrong type / extra prop / long string; **`--max-body-mutations-per-op`** (default **0** to keep CI stable).
+
+**Next (F+ / E):** Redis/queues, campaign memory, deeper RESTler parity checkers (namespace replay), import curated SecLists slices by path only.
+
+---
+
+## Milestone E — Ops & memory (after F foundations)
+
+**Queues (Redis), vector memory, CI profile** — bounded campaigns and recall without bypassing checkers.
 
 ---
 

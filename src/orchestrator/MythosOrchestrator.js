@@ -18,6 +18,8 @@ import { enrichFindingsWithConfidence } from '../verify/confidence.js';
 import { enrichFindingsWithStatistics } from '../verify/statsSignals.js';
 import { minimizationHint } from '../verify/minimize.js';
 import { buildHarLog, buildReplayBundle } from '../verify/evidenceExport.js';
+import { runCheckerPipeline } from '../verify/checkerEngine.js';
+import { MYTHOS_CHECKERS } from '../verify/checkerRegistry.js';
 
 /**
  * @param {unknown} r
@@ -45,6 +47,9 @@ function stripReplayBlob(r) {
  *   evidencePack?: boolean,
  *   maxResponseBodyChars?: number,
  *   aiMutationHints?: boolean,
+ *   wordlistFile?: string | null,
+ *   maxWordlistInjections?: number,
+ *   maxBodyMutationsPerOp?: number,
  * }} cfg
  */
 export async function runMythosPipeline(cfg) {
@@ -222,6 +227,27 @@ export async function runMythosPipeline(cfg) {
     const aiReserve = cfg.aiMutationHints ? Math.min(8, Math.max(0, Math.floor(remaining / 4))) : 0;
     const flatBudget = Math.max(0, remaining - aiReserve);
 
+    /** @type {string[]} */
+    let wordlistLines = [];
+    const wlPath = cfg.wordlistFile?.trim();
+    if (wlPath) {
+      const resolvedWl = path.resolve(wlPath);
+      let rawWl;
+      try {
+        rawWl = fs.readFileSync(resolvedWl, 'utf8');
+      } catch (e) {
+        throw new Error(
+          `Wordlist unreadable: ${resolvedWl} (${/** @type {Error} */ (e).message})`
+        );
+      }
+      const capWl = Math.min(Math.max(1, cfg.maxWordlistInjections ?? 64), 512);
+      wordlistLines = rawWl
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .filter(Boolean)
+        .slice(0, capWl);
+    }
+
     /** @type {import('../hypothesis/HypothesisEngine.js').FuzzCase[]} */
     let aiHintCases = [];
     if (cfg.aiMutationHints && aiReserve > 0) {
@@ -248,6 +274,9 @@ export async function runMythosPipeline(cfg) {
     const flatCases = expandFromOpenApi(spec, surfaceTarget, {
       maxRequests: flatBudget,
       hasAuth: Boolean(cfg.auth),
+      wordlistValues: wordlistLines.length ? wordlistLines : undefined,
+      maxWordlistInjections: cfg.maxWordlistInjections ?? 64,
+      maxBodyMutationsPerOp: cfg.maxBodyMutationsPerOp ?? 0,
     });
     const mergedFlat = [...flatCases, ...aiHintCases].slice(0, remaining);
 
@@ -289,17 +318,27 @@ export async function runMythosPipeline(cfg) {
     index.score(key);
   }
 
-  const baselines = buildBaselineFingerprints(execResults);
-  let findings = triageResults(execResults);
-  findings = enrichFindingsWithConfidence(findings, execResults, baselines).map((f) => ({
-    ...f,
-    minimization: minimizationHint(casesById.get(f.caseId)),
-  }));
-  findings = enrichFindingsWithStatistics(findings, execResults);
-
   const ts = Date.now();
   const generatedAt = new Date(ts).toISOString();
   const outDir = ensureOutputDir(cfg.outputDir);
+  const evidenceHarHint = cfg.evidencePack ? path.join(outDir, `mythos-evidence-${ts}.har`) : null;
+
+  const baselines = buildBaselineFingerprints(execResults);
+  let findings = triageResults(execResults);
+
+  const checkerHits = runCheckerPipeline(execResults, {
+    evidenceHarPath: evidenceHarHint,
+  });
+  findings = [...findings, ...checkerHits];
+
+  findings = enrichFindingsWithConfidence(findings, execResults, baselines).map((f) => ({
+    ...f,
+    minimization:
+      f.kind === 'checker' || f.kind === 'bounty_signal'
+        ? null
+        : minimizationHint(casesById.get(f.caseId)),
+  }));
+  findings = enrichFindingsWithStatistics(findings, execResults);
 
   /** @type {{ har: string, replay: string } | null} */
   let evidencePack = null;
@@ -342,7 +381,13 @@ export async function runMythosPipeline(cfg) {
       scopePolicy: Boolean(cfg.scopePolicy),
       maxResponseBodyChars: previewCap,
       aiMutationHints: Boolean(cfg.aiMutationHints),
+      wordlistFile: cfg.wordlistFile || null,
+      maxWordlistInjections: cfg.maxWordlistInjections ?? 64,
+      maxBodyMutationsPerOp: cfg.maxBodyMutationsPerOp ?? 0,
     },
+    checkerRegistry: MYTHOS_CHECKERS,
+    checkersFired: checkerHits,
+    owaspMappingRef: 'data/owasp-api-mapping.json',
     verifier: {
       baselineRoutes: baselines.size,
       evidenceExport: Boolean(cfg.evidencePack),

@@ -50,6 +50,54 @@ function minimalJsonObject(schema) {
   return Object.keys(out).length ? out : {};
 }
 
+/**
+ * Schema-aware JSON body mutations (capped per operation).
+ *
+ * @param {Record<string, unknown>} schemaRoot
+ * @param {number} max
+ */
+export function buildSchemaBodyMutationVariants(schemaRoot, max) {
+  const schema = schemaRoot;
+  /** @type {Array<{ label: string, body: Record<string, unknown> }>} */
+  const out = [];
+  const minimal = minimalJsonObject(schema);
+  const props = /** @type {Record<string, unknown>} */ (schema.properties || {});
+  const req = Array.isArray(schema.required) ? schema.required : [];
+
+  for (const key of req) {
+    if (typeof key !== 'string' || out.length >= max) break;
+    const clone = { ...minimal };
+    delete clone[key];
+    out.push({ label: `omit_${key}`, body: clone });
+  }
+
+  const keys = Object.keys(props);
+  if (keys.length && out.length < max) {
+    const k = keys[0];
+    const clone = { ...minimal, [k]: '___MYTHOS_TYPE_CONFUSION___' };
+    out.push({ label: `wrong_type_${k}`, body: clone });
+  }
+
+  if (out.length < max) {
+    out.push({
+      label: 'extra_prop',
+      body: { ...minimal, __mythosUnexpected: true },
+    });
+  }
+
+  for (const k of keys) {
+    const p = props[k];
+    const t = p && typeof p === 'object' ? /** @type {Record<string, unknown>} */ (p).type : null;
+    if (t === 'string' && out.length < max) {
+      const clone = { ...minimal, [k]: 'x'.repeat(Math.min(8000, 4000)) };
+      out.push({ label: `longstr_${k}`, body: clone });
+      break;
+    }
+  }
+
+  return out.slice(0, max);
+}
+
 const ID_LIKE = /(^|_)(id|Id|ID|uuid|UUID|pk|Pk|key|Key)($|_)/;
 
 /**
@@ -140,13 +188,23 @@ function defaultPathValues(op) {
 /**
  * @param {import('../openapi/OpenApiLoader.js').NormalizedSpec} spec
  * @param {string} baseUrl
- * @param {{ maxRequests: number, hasAuth: boolean }} opts
+ * @param {{
+ *   maxRequests: number,
+ *   hasAuth: boolean,
+ *   wordlistValues?: string[],
+ *   maxWordlistInjections?: number,
+ *   maxBodyMutationsPerOp?: number,
+ * }} opts
  * @returns {FuzzCase[]}
  */
 export function expandFromOpenApi(spec, baseUrl, opts) {
   /** @type {FuzzCase[]} */
   const cases = [];
   const cap = () => cases.length >= opts.maxRequests;
+  let wlBudget = Math.min(
+    Math.max(0, opts.maxWordlistInjections ?? 0),
+    512
+  );
 
   for (const op of spec.operations) {
     if (cap()) break;
@@ -177,6 +235,57 @@ export function expandFromOpenApi(spec, baseUrl, opts) {
           headers: r.headers || {},
           family: 'OPENAPI_IDOR',
           meta: { ...(r.meta || {}), pathParam: pname, alt },
+        });
+      }
+    }
+
+    if (opts.wordlistValues?.length && wlBudget > 0) {
+      for (const pname of op.pathParamNames) {
+        if (!isIdLikeParam(pname)) continue;
+        for (const rawVal of opts.wordlistValues) {
+          if (cap() || wlBudget <= 0) break;
+          const val = String(rawVal).slice(0, 512);
+          const pv = { ...pathVals, [pname]: val };
+          const r = buildRequest({ baseUrl, operation: op, pathValues: pv });
+          cases.push({
+            id: `spec:${op.operationId}:wl:${pname}:${cases.length}`,
+            method: op.method,
+            url: r.url,
+            headers: r.headers || {},
+            family: 'OPENAPI_WORDLIST',
+            meta: { ...(r.meta || {}), pathParam: pname, wordlist: true },
+          });
+          wlBudget--;
+        }
+      }
+    }
+
+    const mutCap = Math.min(Math.max(0, opts.maxBodyMutationsPerOp ?? 0), 16);
+    if (
+      mutCap > 0 &&
+      ['POST', 'PUT', 'PATCH'].includes(op.method) &&
+      op.requestBody?.schema &&
+      typeof op.requestBody.schema === 'object'
+    ) {
+      const variants = buildSchemaBodyMutationVariants(
+        /** @type {Record<string, unknown>} */ (op.requestBody.schema),
+        mutCap
+      );
+      for (const v of variants) {
+        if (cap()) break;
+        const r = buildRequest({ baseUrl, operation: op, pathValues: pathVals });
+        cases.push({
+          id: `spec:${op.operationId}:bodyfuzz:${v.label}`,
+          method: op.method,
+          url: r.url,
+          headers: r.headers || {},
+          family: 'OPENAPI_BODY_FUZZ',
+          meta: {
+            ...(r.meta || {}),
+            jsonBody: v.body,
+            contentType: 'application/json',
+            bodyMutation: v.label,
+          },
         });
       }
     }

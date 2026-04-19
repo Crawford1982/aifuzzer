@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "description": "Deterministic response matchers for bounty-style triage (regex on redacted previews only).",
+  "signals": [
+    {
+      "id": "server_stack_trace",
+      "name": "Possible stack trace / framework error",
+      "severity": "medium",
+      "referenceUrl": "https://owasp.org/API-Security/editions/2023/en/0xa8-security-misconfiguration/",
+      "matcher": {
+        "statusMin": 500,
+        "bodyRegex": "(\\bat\\s+\\w+\\.|Exception|Traceback|stack trace|Caused by:|nested exception)"
+      }
+    },
+    {
+      "id": "sql_error_echo",
+      "name": "Possible SQL error echoed",
+      "severity": "high",
+      "referenceUrl": "https://cwe.mitre.org/data/definitions/209.html",
+      "matcher": {
+        "statusMin": 400,
+        "bodyRegex": "(SQL syntax|ORA-\\d+|PostgreSQL|sqlite3.|mysql_|syntax error near)"
+      }
+    },
+    {
+      "id": "verbose_admin_debug",
+      "name": "Verbose / admin / debug marker",
+      "severity": "low",
+      "referenceUrl": "https://owasp.org/API-Security/editions/2023/en/0xa8-security-misconfiguration/",
+      "matcher": {
+        "statusMin": 200,
+        "statusMax": 299,
+        "bodyRegex": "(\"debug\"\\s*:\\s*true|admin.?token|internal.?error.?detail)"
+      }
+    },
+    {
+      "id": "jwt_or_bearer_leak",
+      "name": "Looks like bearer/JWT material in body",
+      "severity": "high",
+      "referenceUrl": "https://owasp.org/API-Security/editions/2023/en/0xa2-broken-authentication/",
+      "matcher": {
+        "statusMin": 200,
+        "bodyRegex": "(eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.|Bearer\\s+[A-Za-z0-9._-]{20,})"
+      }
+    }
+  ]
+}

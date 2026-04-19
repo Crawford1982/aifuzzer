@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "description": "Maps Mythos checker/signal IDs to OWASP API Security themes (reference only).",
+  "entries": [
+    {
+      "owaspId": "API1:2023",
+      "title": "Broken Object Level Authorization",
+      "checkerIds": ["resource_hierarchy_cross_parent"],
+      "signalIds": []
+    },
+    {
+      "owaspId": "API2:2023",
+      "title": "Broken Authentication",
+      "checkerIds": [],
+      "signalIds": ["jwt_or_bearer_leak"]
+    },
+    {
+      "owaspId": "API8:2023",
+      "title": "Security Misconfiguration",
+      "checkerIds": ["delete_still_readable", "leak_after_failed_create"],
+      "signalIds": ["server_stack_trace", "verbose_admin_debug", "sql_error_echo"]
+    },
+    {
+      "owaspId": "API10:2023",
+      "title": "Unsafe Consumption of APIs",
+      "checkerIds": ["leak_after_failed_create"],
+      "signalIds": []
+    }
+  ]
+}

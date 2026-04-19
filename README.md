@@ -48,6 +48,9 @@ npm start -- --target "https://jsonplaceholder.typicode.com" --openapi ./fixture
 # Optional: LLM suggests extra query/header probes (MYTHOS_LLM_API_KEY); hints validated vs spec
 npm start -- --target "https://jsonplaceholder.typicode.com" --openapi ./fixtures/minimal-posts.openapi.json --ai-mutation-hints
 
+# Checker-backed expansion (capped): wordlist paths + schema body fuzz (enable mutations explicitly)
+npm start -- --target "https://jsonplaceholder.typicode.com" --openapi ./fixtures/minimal-posts.openapi.json --wordlist ./fixtures/sample-wordlist.txt --max-body-mutations-per-op 2
+
 # OpenAPI-driven (JSON or YAML)
 npm start -- --target "https://jsonplaceholder.typicode.com" --openapi ./fixtures/minimal-posts.openapi.json
 
@@ -74,12 +77,15 @@ npm test
 | `npm run test:scoped-chain` | Nested path chain: list → `/posts/{id}/comments` (mocked `fetch`). |
 | `npm run test:stats-signals` | Binomial route-level surprise for 5xx clusters (offline). |
 | `npm run test:ai-advisor` | LLM mutation hints → validated `OPENAPI_AI_HINT` cases (mocked provider). |
+| `npm run test:checker-engine` | Invariant checkers (leakage, delete, hierarchy) + pipeline (offline). |
+| `npm run test:body-mutations` | Schema body mutation generator (offline). |
+| `npm run test:wordlist-expand` | OpenAPI + `fixtures/sample-wordlist.txt` path injection (offline). |
 | `npm run test:llm-e2e` | Optional real LLM call — set **`MYTHOS_E2E_LLM=1`** + `MYTHOS_LLM_API_KEY`; **not** in `npm test`. |
 | `npm run test:scope-lab-agent` | Optional integration with `cloud-brain-scope-lab` adapter (hits **jsonplaceholder** unless modified). |
 
 Fixtures live under **`fixtures/`** — `minimal-posts.openapi.json` includes **`POST /posts`** (`createPost`) alongside list/get routes for **`post_to_item`** chains.
 
-**Milestone reference:** [`docs/MILESTONES.md`](docs/MILESTONES.md).
+**Milestone reference:** [`docs/MILESTONES.md`](docs/MILESTONES.md) through **Milestone F** (checker registry, bounty battery, optional wordlist / body mutations — LLM stays downstream of checkers).
 
 **LLM planning (live API):** set `MYTHOS_LLM_API_KEY`, then e.g.  
 `npm start -- --target "https://jsonplaceholder.typicode.com" --openapi ./fixtures/minimal-posts.openapi.json --plan-with-llm`
@@ -97,7 +103,8 @@ src/
   orchestrator/  # Pipeline
   execution/     # HTTP pool + sequential chains
   feedback/      # Response novelty / indexing
-  verify/        # Triage + replay curl evidence
+  verify/        # Triage, checkers, stats, HAR / replay
+data/            # bounty-signals.json, owasp mapping (reference)
 docs/
   ARCHITECTURE.md
   ROADMAP.md

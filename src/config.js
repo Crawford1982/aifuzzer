@@ -18,6 +18,9 @@ export function parseArgv(argv) {
     evidencePack: false,
     aiMutationHints: false,
     maxResponseBodyChars: undefined,
+    wordlistFile: null,
+    maxWordlistInjections: 64,
+    maxBodyMutationsPerOp: 0,
     help: false,
   };
 
@@ -38,6 +41,9 @@ export function parseArgv(argv) {
     else if (a === '--evidence-pack') args.evidencePack = true;
     else if (a === '--ai-mutation-hints') args.aiMutationHints = true;
     else if (a === '--max-response-chars') args.maxResponseBodyChars = Number(argv[++i]);
+    else if (a === '--wordlist') args.wordlistFile = argv[++i];
+    else if (a === '--max-wordlist-injections') args.maxWordlistInjections = Number(argv[++i]);
+    else if (a === '--max-body-mutations-per-op') args.maxBodyMutationsPerOp = Number(argv[++i]);
   }
 
   return args;

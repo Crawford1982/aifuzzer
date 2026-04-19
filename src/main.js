@@ -37,6 +37,11 @@ Milestone D — evidence export:
 AI-assisted fuzzing (OpenAPI, spec-only prompt; hints validated before HTTP):
   --ai-mutation-hints            Ask the LLM for extra query/header probes (uses MYTHOS_LLM_*; capped budget).
 
+Checker oracles & bounded fuzz expansion (OpenAPI):
+  --wordlist <path>               Inject values into ID-like path params (capped; requires --openapi).
+  --max-wordlist-injections <n>  Max injections total (default 64, hard cap 512).
+  --max-body-mutations-per-op <n> Schema-aware JSON body probes per POST/PUT/PATCH op (default 0).
+
 Examples:
   npm start -- --target "https://jsonplaceholder.typicode.com" --openapi ./spec/openapi.json
   npm start -- --target "https://jsonplaceholder.typicode.com" --stub-plan
@@ -153,6 +158,13 @@ async function main() {
         maxResponseBodyChars: Number.isFinite(args.maxResponseBodyChars)
           ? args.maxResponseBodyChars
           : undefined,
+        wordlistFile: args.wordlistFile || null,
+        maxWordlistInjections: Number.isFinite(args.maxWordlistInjections)
+          ? args.maxWordlistInjections
+          : 64,
+        maxBodyMutationsPerOp: Number.isFinite(args.maxBodyMutationsPerOp)
+          ? args.maxBodyMutationsPerOp
+          : 0,
         ...defaults,
       }
     : await promptConfig(defaults);
@@ -162,6 +174,9 @@ async function main() {
   if (args.evidencePack) config.evidencePack = true;
   if (args.aiMutationHints) config.aiMutationHints = true;
   if (Number.isFinite(args.maxResponseBodyChars)) config.maxResponseBodyChars = args.maxResponseBodyChars;
+  if (args.wordlistFile) config.wordlistFile = args.wordlistFile;
+  if (Number.isFinite(args.maxWordlistInjections)) config.maxWordlistInjections = args.maxWordlistInjections;
+  if (Number.isFinite(args.maxBodyMutationsPerOp)) config.maxBodyMutationsPerOp = args.maxBodyMutationsPerOp;
 
   const resolvedCli = resolveTargetUrl(config.target);
   if (!resolvedCli.ok) {
@@ -199,6 +214,13 @@ async function main() {
     aiMutationHints: Boolean(config.aiMutationHints),
     maxResponseBodyChars:
       Number.isFinite(config.maxResponseBodyChars) ? config.maxResponseBodyChars : undefined,
+    wordlistFile: config.wordlistFile || null,
+    maxWordlistInjections: Number.isFinite(config.maxWordlistInjections)
+      ? config.maxWordlistInjections
+      : 64,
+    maxBodyMutationsPerOp: Number.isFinite(config.maxBodyMutationsPerOp)
+      ? config.maxBodyMutationsPerOp
+      : 0,
   });
 
   console.log(`\nReport written: ${outfile}`);
