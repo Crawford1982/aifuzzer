@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "target": "https://jsonplaceholder.typicode.com",
+  "openapiPath": "fixtures/minimal-posts.openapi.json",
+  "outputDir": "output",
+  "maxRequests": 48,
+  "concurrency": 2,
+  "timeoutMs": 8000,
+  "maxRps": 8,
+  "useStubPlan": false,
+  "planWithLlm": false,
+  "evidencePack": false,
+  "ci": true
+}

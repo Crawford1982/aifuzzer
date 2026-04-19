@@ -4,6 +4,9 @@
 
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+import { buildSessionSummary, mergeCampaignMemory } from '../campaign/sessionMemory.js';
 
 import { probeRestSurface } from '../surface/RestSurfaceProbe.js';
 import { SemanticModel } from '../semantic/SemanticModel.js';
@@ -50,11 +53,28 @@ function stripReplayBlob(r) {
  *   wordlistFile?: string | null,
  *   maxWordlistInjections?: number,
  *   maxBodyMutationsPerOp?: number,
+ *   authAlt?: string | null,
+ *   namespaceReplayBudget?: number,
+ *   useCuratedWordlist?: boolean,
+ *   campaignMemoryFile?: string | null,
  * }} cfg
  */
 export async function runMythosPipeline(cfg) {
   const model = new SemanticModel();
   const index = new ResponseIndex();
+
+  /** @type {Record<string, unknown> | null} */
+  let persistedCampaignMemory = null;
+  if (cfg.campaignMemoryFile?.trim()) {
+    const mp = path.resolve(cfg.campaignMemoryFile.trim());
+    if (fs.existsSync(mp)) {
+      try {
+        persistedCampaignMemory = JSON.parse(fs.readFileSync(mp, 'utf8'));
+      } catch {
+        /* ignore corrupted memory */
+      }
+    }
+  }
 
   const transport = buildTransportOpts({
     timeoutMs: cfg.timeoutMs,
@@ -229,6 +249,22 @@ export async function runMythosPipeline(cfg) {
 
     /** @type {string[]} */
     let wordlistLines = [];
+    const __root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+    const curatedDefault = path.join(__root, 'data', 'seclists-curated', 'ids-small.txt');
+
+    if (cfg.useCuratedWordlist && fs.existsSync(curatedDefault)) {
+      const capCur = Math.min(24, cfg.maxWordlistInjections ?? 64);
+      const curatedRaw = fs.readFileSync(curatedDefault, 'utf8');
+      wordlistLines.push(
+        ...curatedRaw
+          .split(/\r?\n/)
+          .map((l) => l.trim())
+          .filter(Boolean)
+          .slice(0, capCur)
+      );
+      model.observe({ kind: 'curated_wordlist', lines: wordlistLines.length });
+    }
+
     const wlPath = cfg.wordlistFile?.trim();
     if (wlPath) {
       const resolvedWl = path.resolve(wlPath);
@@ -241,12 +277,16 @@ export async function runMythosPipeline(cfg) {
         );
       }
       const capWl = Math.min(Math.max(1, cfg.maxWordlistInjections ?? 64), 512);
-      wordlistLines = rawWl
+      const fromFile = rawWl
         .split(/\r?\n/)
         .map((l) => l.trim())
         .filter(Boolean)
         .slice(0, capWl);
+      wordlistLines = [...wordlistLines, ...fromFile];
     }
+
+    const capTotal = Math.min(Math.max(1, cfg.maxWordlistInjections ?? 64), 512);
+    wordlistLines = [...new Set(wordlistLines)].slice(0, capTotal);
 
     /** @type {import('../hypothesis/HypothesisEngine.js').FuzzCase[]} */
     let aiHintCases = [];
@@ -303,7 +343,43 @@ export async function runMythosPipeline(cfg) {
     });
   }
 
+  if (spec && cfg.auth?.trim() && cfg.authAlt?.trim()) {
+    const nsCasesById = new Map(cases.map((c) => [c.id, c]));
+    const { runNamespaceAuthReplay } = await import('../verify/namespaceReplay.js');
+    const nsBudget = Math.min(Math.max(1, cfg.namespaceReplayBudget ?? 24), 48);
+    const nsResults = await runNamespaceAuthReplay({
+      execResults,
+      casesById: nsCasesById,
+      transport,
+      bodyRead,
+      concurrency: cfg.concurrency,
+      budget: nsBudget,
+      primaryAuth: cfg.auth,
+      altAuth: cfg.authAlt,
+    });
+
+    if (nsResults.length) {
+      execResults = [...execResults, ...nsResults];
+      /** @type {typeof cases} */
+      const extraCases = [];
+      for (const nr of nsResults) {
+        const cid = String(/** @type {Record<string, unknown>} */ (nr).caseId || '');
+        const baseId = cid.replace(/:authAlt$/, '');
+        const baseCase = nsCasesById.get(baseId);
+        if (!baseCase) continue;
+        extraCases.push({
+          ...baseCase,
+          id: cid,
+          family: 'NAMESPACE_AUTH_REPLAY',
+        });
+      }
+      cases = [...cases, ...extraCases];
+      model.observe({ kind: 'namespace_replay', count: nsResults.length });
+    }
+  }
+
   const casesById = new Map(cases.map((c) => [c.id, c]));
+
   const resultsWithEvidence = attachEvidenceCurls(execResults, casesById, {
     authHeader: cfg.auth || null,
   });
@@ -339,6 +415,14 @@ export async function runMythosPipeline(cfg) {
         : minimizationHint(casesById.get(f.caseId)),
   }));
   findings = enrichFindingsWithStatistics(findings, execResults);
+
+  const sessionSnapshot = buildSessionSummary(execResults);
+
+  if (cfg.campaignMemoryFile?.trim()) {
+    const mp = path.resolve(cfg.campaignMemoryFile.trim());
+    const merged = mergeCampaignMemory(persistedCampaignMemory, sessionSnapshot);
+    fs.writeFileSync(mp, JSON.stringify(merged, null, 2));
+  }
 
   /** @type {{ har: string, replay: string } | null} */
   let evidencePack = null;
@@ -384,6 +468,10 @@ export async function runMythosPipeline(cfg) {
       wordlistFile: cfg.wordlistFile || null,
       maxWordlistInjections: cfg.maxWordlistInjections ?? 64,
       maxBodyMutationsPerOp: cfg.maxBodyMutationsPerOp ?? 0,
+      authAltConfigured: Boolean(cfg.authAlt?.trim()),
+      namespaceReplayBudget: cfg.namespaceReplayBudget ?? 24,
+      useCuratedWordlist: Boolean(cfg.useCuratedWordlist),
+      campaignMemoryFile: cfg.campaignMemoryFile || null,
     },
     checkerRegistry: MYTHOS_CHECKERS,
     checkersFired: checkerHits,
@@ -399,6 +487,7 @@ export async function runMythosPipeline(cfg) {
       statuses: surface.probes.map((p) => p.status),
     },
     semanticSnapshot: model.snapshot(),
+    sessionMemory: sessionSnapshot,
     executed: execResults.length,
     findings,
     results: sanitizedResults,

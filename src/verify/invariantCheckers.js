@@ -3,6 +3,7 @@
  */
 
 import { fingerprintBody } from './baseline.js';
+import { checkNamespacePrincipalOverlap } from './namespaceReplay.js';
 
 /**
  * @param {unknown} x
@@ -139,6 +140,39 @@ export function normalizedPathTemplate(pathname) {
 }
 
 /**
+ * Skip hierarchy checker on empty shells / identical public list plumbing (reduces FP on read-only APIs).
+ *
+ * @param {string} text
+ */
+export function isTrivialPublicPayload(text) {
+  const t = text.trim();
+  if (t.length < 48) return true;
+  if (/^\[\s*\]\s*$/.test(t)) return true;
+  if (/^\{\s*\}\s*$/.test(t)) return true;
+  try {
+    const j = JSON.parse(t);
+    if (Array.isArray(j) && j.length === 0) return true;
+    if (
+      Array.isArray(j) &&
+      j.length > 0 &&
+      j.length <= 3 &&
+      j.every((row) => row && typeof row === 'object' && Object.keys(row).length <= 3)
+    ) {
+      const keys = new Set();
+      for (const row of j) {
+        if (row && typeof row === 'object') {
+          for (const k of Object.keys(row)) keys.add(k);
+        }
+      }
+      if (keys.size <= 3 && keys.has('id')) return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
+/**
  * Same normalized GET template, different concrete paths, both 200, identical body fingerprint.
  *
  * @param {unknown[]} execResults
@@ -157,7 +191,8 @@ export function checkResourceHierarchyCrossParent(execResults) {
     const tmpl = normalizedPathTemplate(p);
     const key = `GET:${tmpl}`;
     const prev = String(o.bodyPreview || '');
-    if (prev.length < 32) continue;
+    if (prev.length < 64) continue;
+    if (isTrivialPublicPayload(prev)) continue;
     const fp = fingerprintBody(prev);
     if (!fp) continue;
 
@@ -205,5 +240,7 @@ export function runInvariantCheckers(execResults) {
     ...checkLeakAfterFailedCreate(execResults),
     ...checkDeleteStillReadable(execResults),
     ...checkResourceHierarchyCrossParent(execResults),
+    ...checkNamespacePrincipalOverlap(execResults),
   ];
 }
+

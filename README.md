@@ -51,6 +51,9 @@ npm start -- --target "https://jsonplaceholder.typicode.com" --openapi ./fixture
 # Checker-backed expansion (capped): wordlist paths + schema body fuzz (enable mutations explicitly)
 npm start -- --target "https://jsonplaceholder.typicode.com" --openapi ./fixtures/minimal-posts.openapi.json --wordlist ./fixtures/sample-wordlist.txt --max-body-mutations-per-op 2
 
+# Optional: alternate principal replay + tiny curated ID list + campaign memory file (see --help)
+# npm start -- ... --auth TOKEN --auth-alt OTHER --namespace-replay-budget 16 --curated-wordlist --campaign-memory ./output/campaign-memory.json
+
 # OpenAPI-driven (JSON or YAML)
 npm start -- --target "https://jsonplaceholder.typicode.com" --openapi ./fixtures/minimal-posts.openapi.json
 
@@ -80,12 +83,29 @@ npm test
 | `npm run test:checker-engine` | Invariant checkers (leakage, delete, hierarchy) + pipeline (offline). |
 | `npm run test:body-mutations` | Schema body mutation generator (offline). |
 | `npm run test:wordlist-expand` | OpenAPI + `fixtures/sample-wordlist.txt` path injection (offline). |
+| `npm run test:session-memory` | Campaign memory merge + session summary (offline). |
+| `npm run test:namespace-overlap` | Namespace / alt-auth overlap checker (offline). |
+| `npm run test:hierarchy-trivial` | Hierarchy checker skips trivial public list shells (offline). |
+| `npm run test:milestone-e` | CI profile, campaign job validation, file queue + stale recovery, route ranking (offline). |
+| `npm run test:auth-refs` | Auth-by-env resolution for CLI/jobs (offline). |
 | `npm run test:llm-e2e` | Optional real LLM call — set **`MYTHOS_E2E_LLM=1`** + `MYTHOS_LLM_API_KEY`; **not** in `npm test`. |
 | `npm run test:scope-lab-agent` | Optional integration with `cloud-brain-scope-lab` adapter (hits **jsonplaceholder** unless modified). |
 
 Fixtures live under **`fixtures/`** — `minimal-posts.openapi.json` includes **`POST /posts`** (`createPost`) alongside list/get routes for **`post_to_item`** chains.
 
-**Milestone reference:** [`docs/MILESTONES.md`](docs/MILESTONES.md) through **Milestone F** (checker registry, bounty battery, optional wordlist / body mutations — LLM stays downstream of checkers).
+**Milestone reference:** [`docs/MILESTONES.md`](docs/MILESTONES.md) through **Milestone E** (CI mode, campaign jobs, file or Redis queues, worker/enqueue — same pipeline as CLI).
+
+**Milestone E — ops (optional):**
+
+- **`MYTHOS_CI=1`** or **`--ci`** — conservative caps; requires **`--openapi` or `--stub-plan`** with **`--target`**. **`--ci-fail-on-findings`** exits **2** if `findings.length > 0`.
+- **`MYTHOS_CI_REQUIRE_SCOPE=1`** or **`--ci-require-scope`** — when combined with **`--ci`**, refuses to run unless **`--scope-file`** is set (authorization is still on you; this pins *surface predictability*).
+- **`--auth-env NAME`** / **`--auth-alt-env NAME`** — read Bearer material from env (same pattern for campaign jobs: **`authEnv`** / **`authAltEnv`** in JSON), so secrets stay out of job files and shell history where possible.
+- **`npm run mythos:enqueue -- fixtures/mythos-campaign-job.example.json`** — push a validated job (see `MYTHOS_QUEUE_DIR`, default `.mythos-queue/`).
+- **`MYTHOS_REDIS_URL=redis://...`** — Redis queue; successes append to **`mythos:campaign:jobs:done`** (trimmed list, cap **`MYTHOS_REDIS_DONE_CAP`**); worker startup **re-queues** orphaned **`processing`** entries after a crash.
+- **`MYTHOS_STALE_PROCESSING_MS`** — file queue re-queues **`processing/*.json`** older than this threshold (default 30 minutes).
+- **`npm run mythos:worker`** — drain queue (same HTTP pipeline as `npm start`). **`--once`** exits after one job or empty queue.
+
+**Single-machine lab:** With no shared queue directory or Redis instance, exposure is mostly **your OS account** and **whatever URLs you aim at**. Still only test targets you’re allowed to hit; **`--scope-file`** + **`--ci-require-scope`** make accidental broad exploration harder.
 
 **LLM planning (live API):** set `MYTHOS_LLM_API_KEY`, then e.g.  
 `npm start -- --target "https://jsonplaceholder.typicode.com" --openapi ./fixtures/minimal-posts.openapi.json --plan-with-llm`
@@ -99,15 +119,18 @@ src/
   state/         # Dependency edges + JSON handle extract
   semantic/      # Layer 2 (observations stub)
   hypothesis/    # Patterns, OpenAPI expansion, stateful campaigns
-  planner/       # Typed execution plans (stub; LLM later)
+  planner/       # Typed execution plans (+ bounded LLM)
   orchestrator/  # Pipeline
   execution/     # HTTP pool + sequential chains
   feedback/      # Response novelty / indexing
   verify/        # Triage, checkers, stats, HAR / replay
-data/            # bounty-signals.json, owasp mapping (reference)
+  campaign/      # Session / campaign memory merge (deterministic)
+  ops/           # Milestone E: CI profile, queues, worker, auth-by-env
+data/            # bounty-signals.json, owasp mapping, curated wordlist slice
 docs/
   ARCHITECTURE.md
   ROADMAP.md
+  MILESTONES.md
 ```
 
 ## Philosophy
@@ -116,8 +139,4 @@ Ship **narrow vertical slices** inside this skeleton. Expand agents and semantic
 
 ## Workspace boundaries
 
-- `C:\Users\Admin\Desktop\cloud brain` = your original chat app baseline.
-- `C:\Users\Admin\Desktop\AI-guided REST API fuzzer\cloud-brain-scope-lab` = the fork for scope URL ingestion + targeting workflow experiments.
-- `C:\Users\Admin\Desktop\AI-guided REST API fuzzer` = Mythos fuzzer core (CLI + architecture docs).
-
-Use `docs/WORKSPACE-BOUNDARIES.md` as the source of truth for where to edit.
+This repo root is the **Mythos fuzzer core** (`src/`, CLI, docs). Experimental scope UI and adapters live under **`cloud-brain-scope-lab/`**. Canonical folder roles and clone-specific paths are in **`docs/WORKSPACE-BOUNDARIES.md`**.

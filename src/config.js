@@ -21,6 +21,15 @@ export function parseArgv(argv) {
     wordlistFile: null,
     maxWordlistInjections: 64,
     maxBodyMutationsPerOp: 0,
+    authAlt: null,
+    namespaceReplayBudget: 24,
+    useCuratedWordlist: false,
+    campaignMemoryFile: null,
+    authEnv: null,
+    authAltEnv: null,
+    ci: false,
+    ciFailOnFindings: false,
+    ciRequireScope: false,
     help: false,
   };
 
@@ -44,6 +53,15 @@ export function parseArgv(argv) {
     else if (a === '--wordlist') args.wordlistFile = argv[++i];
     else if (a === '--max-wordlist-injections') args.maxWordlistInjections = Number(argv[++i]);
     else if (a === '--max-body-mutations-per-op') args.maxBodyMutationsPerOp = Number(argv[++i]);
+    else if (a === '--auth-alt') args.authAlt = argv[++i];
+    else if (a === '--namespace-replay-budget') args.namespaceReplayBudget = Number(argv[++i]);
+    else if (a === '--curated-wordlist') args.useCuratedWordlist = true;
+    else if (a === '--campaign-memory') args.campaignMemoryFile = argv[++i];
+    else if (a === '--ci') args.ci = true;
+    else if (a === '--ci-fail-on-findings') args.ciFailOnFindings = true;
+    else if (a === '--ci-require-scope') args.ciRequireScope = true;
+    else if (a === '--auth-env') args.authEnv = argv[++i];
+    else if (a === '--auth-alt-env') args.authAltEnv = argv[++i];
   }
 
   return args;

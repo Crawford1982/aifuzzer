@@ -39,6 +39,14 @@ export const MYTHOS_CHECKERS = [
     owaspMapping: ['API1:2023'],
     bountyTierHint: 'high',
   },
+  {
+    checkerId: 'namespace_cross_principal_overlap',
+    title: 'Same resource body for primary vs alternate Authorization',
+    precondition:
+      '--auth and --auth-alt set; replayed GETs with alternate token returned 200 with the same body fingerprint as the primary run (possible cross-tenant access).',
+    owaspMapping: ['API1:2023', 'API5:2023'],
+    bountyTierHint: 'high',
+  },
 ];
 
 const BY_ID = new Map(MYTHOS_CHECKERS.map((c) => [c.checkerId, c]));

@@ -2,6 +2,9 @@
 
 import { parseArgv } from './config.js';
 import { runMythosPipeline } from './orchestrator/MythosOrchestrator.js';
+import { isCiMode, applyCiProfile, resolveMythosExitCode } from './ops/ciProfile.js';
+import { resolveAuthFields } from './ops/authRefs.js';
+import { isCiRequireScope } from './ops/ciScope.js';
 import readline from 'readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import { resolveTargetUrl } from './util/resolveTargetUrl.js';
@@ -41,6 +44,23 @@ Checker oracles & bounded fuzz expansion (OpenAPI):
   --wordlist <path>               Inject values into ID-like path params (capped; requires --openapi).
   --max-wordlist-injections <n>  Max injections total (default 64, hard cap 512).
   --max-body-mutations-per-op <n> Schema-aware JSON body probes per POST/PUT/PATCH op (default 0).
+
+Principal / campaign (OpenAPI + both auths — bounded, no vendor megawordlists):
+  --auth-alt <token|header>       With --auth + --openapi: replay GETs with alternate Authorization (capped).
+  --namespace-replay-budget <n>   Max distinct URLs for alt-auth replay (default 24, hard cap 48).
+  --curated-wordlist              Merge tiny in-repo ID slice (data/seclists-curated/ids-small.txt) under caps.
+  --campaign-memory <path>        Load/merge/write bounded route stats JSON for the next run.
+
+Milestone E — CI / queues:
+  MYTHOS_CI=1 or --ci             Conservative caps; disables LLM planner + AI hints + evidence-pack write.
+                                  Requires --openapi or --stub-plan with --target (non-interactive).
+  --ci-fail-on-findings           With CI: exit 2 if any findings (pipeline gates).
+  MYTHOS_CI_REQUIRE_SCOPE / --ci-require-scope   With CI: refuse to run unless --scope-file is set (safety posture).
+  --auth-env NAME                 Read primary auth from env var (e.g. MYTHOS_API_TOKEN); do not combine with --auth.
+  --auth-alt-env NAME             Alternate principal for namespace replay via env var.
+  MYTHOS_QUEUE_DIR                File job queue directory (default ./.mythos-queue).
+  MYTHOS_REDIS_URL                Redis queue + durable done list mythos:campaign:jobs:done (cap MYTHOS_REDIS_DONE_CAP).
+  MYTHOS_STALE_PROCESSING_MS      Re-queue file-queue jobs stuck in processing/ older than this (default 30m).
 
 Examples:
   npm start -- --target "https://jsonplaceholder.typicode.com" --openapi ./spec/openapi.json
@@ -132,6 +152,17 @@ async function main() {
     process.exit(0);
   }
 
+  const ci = isCiMode(args);
+
+  if (ci && !args.target) {
+    console.error('Error: MYTHOS_CI / --ci require --target (non-interactive).');
+    process.exit(1);
+  }
+  if (ci && !args.openapiPath && !args.useStubPlan) {
+    console.error('Error: CI mode requires --openapi <spec> or --stub-plan for reproducible runs.');
+    process.exit(1);
+  }
+
   if (args.planWithLlm && !args.openapiPath) {
     console.error('Error: --plan-with-llm requires --openapi <spec.json|yaml>');
     process.exit(1);
@@ -165,6 +196,14 @@ async function main() {
         maxBodyMutationsPerOp: Number.isFinite(args.maxBodyMutationsPerOp)
           ? args.maxBodyMutationsPerOp
           : 0,
+        authAlt: args.authAlt || null,
+        namespaceReplayBudget: Number.isFinite(args.namespaceReplayBudget)
+          ? args.namespaceReplayBudget
+          : 24,
+        useCuratedWordlist: Boolean(args.useCuratedWordlist),
+        campaignMemoryFile: args.campaignMemoryFile || null,
+        authEnv: args.authEnv || null,
+        authAltEnv: args.authAltEnv || null,
         ...defaults,
       }
     : await promptConfig(defaults);
@@ -177,6 +216,23 @@ async function main() {
   if (args.wordlistFile) config.wordlistFile = args.wordlistFile;
   if (Number.isFinite(args.maxWordlistInjections)) config.maxWordlistInjections = args.maxWordlistInjections;
   if (Number.isFinite(args.maxBodyMutationsPerOp)) config.maxBodyMutationsPerOp = args.maxBodyMutationsPerOp;
+  if (args.authAlt) config.authAlt = args.authAlt;
+  if (Number.isFinite(args.namespaceReplayBudget)) config.namespaceReplayBudget = args.namespaceReplayBudget;
+  if (args.useCuratedWordlist) config.useCuratedWordlist = true;
+  if (args.campaignMemoryFile) config.campaignMemoryFile = args.campaignMemoryFile;
+  if (args.ci) config.ci = true;
+  if (args.ciFailOnFindings) config.ciFailOnFindings = true;
+  if (args.ciRequireScope) config.ciRequireScope = true;
+  if (args.authEnv) config.authEnv = args.authEnv;
+  if (args.authAltEnv) config.authAltEnv = args.authAltEnv;
+
+  if (ci) {
+    applyCiProfile(
+      /** @type {Record<string, unknown>} */ (
+        /** @type {unknown} */ (config)
+      )
+    );
+  }
 
   const resolvedCli = resolveTargetUrl(config.target);
   if (!resolvedCli.ok) {
@@ -184,6 +240,27 @@ async function main() {
     process.exit(1);
   }
   config.target = resolvedCli.url;
+
+  if (ci && isCiRequireScope(args) && !(config.scopeFile && String(config.scopeFile).trim())) {
+    console.error(
+      'Error: MYTHOS_CI_REQUIRE_SCOPE / --ci-require-scope requires --scope-file (predictable surface).'
+    );
+    process.exit(1);
+  }
+
+  /** @type {{ auth: string | null, authAlt: string | null }} */
+  let resolvedAuthBundle;
+  try {
+    resolvedAuthBundle = resolveAuthFields({
+      auth: config.auth,
+      authEnv: /** @type {unknown} */ (config).authEnv ?? null,
+      authAlt: config.authAlt || null,
+      authAltEnv: /** @type {unknown} */ (config).authAltEnv ?? null,
+    });
+  } catch (e) {
+    console.error((/** @type {Error} */ (e)).message || e);
+    process.exit(1);
+  }
 
   /** @type {import('./safety/scopePolicy.js').ScopePolicy | null} */
   let scopePolicy = null;
@@ -199,7 +276,7 @@ async function main() {
 
   const { outfile, report } = await runMythosPipeline({
     target: config.target,
-    auth: config.auth,
+    auth: resolvedAuthBundle.auth,
     concurrency: config.concurrency,
     maxRequests: config.maxRequests,
     timeoutMs: config.timeoutMs,
@@ -221,6 +298,12 @@ async function main() {
     maxBodyMutationsPerOp: Number.isFinite(config.maxBodyMutationsPerOp)
       ? config.maxBodyMutationsPerOp
       : 0,
+    authAlt: resolvedAuthBundle.authAlt,
+    namespaceReplayBudget: Number.isFinite(config.namespaceReplayBudget)
+      ? config.namespaceReplayBudget
+      : 24,
+    useCuratedWordlist: Boolean(config.useCuratedWordlist),
+    campaignMemoryFile: config.campaignMemoryFile || null,
   });
 
   console.log(`\nReport written: ${outfile}`);
@@ -236,6 +319,12 @@ async function main() {
       console.log(`- [${f.severity}] ${f.title}: ${f.detail}`);
     }
   }
+
+  const exitCode = resolveMythosExitCode(report, {
+    ci,
+    failOnFindings: Boolean(args.ciFailOnFindings),
+  });
+  process.exit(exitCode);
 }
 
 main().catch((e) => {

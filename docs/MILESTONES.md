@@ -2,7 +2,7 @@
 
 Single source of truth for **delivery phases** and **exit criteria**. Implementation details live in code; this file tracks **what “done” means**.
 
-**Tests (regression):** `npm test` — see `package.json` (offline; no API keys). **A–F** on `main` are expected to pass. **F** adds `test:checker-engine`, `test:body-mutations`, `test:wordlist-expand`. Optional live LLM: `MYTHOS_E2E_LLM=1 npm run test:llm-e2e`.
+**Tests (regression):** `npm test` — see `package.json` (offline; no API keys). **A–F** on `main` are expected to pass. **F** adds `test:checker-engine`, `test:body-mutations`, `test:wordlist-expand`. **E** adds `test:milestone-e`, **`test:auth-refs`**. Optional live LLM: `MYTHOS_E2E_LLM=1 npm run test:llm-e2e`.
 
 ---
 
@@ -90,13 +90,30 @@ Single source of truth for **delivery phases** and **exit criteria**. Implementa
 - [x] **Optional wordlist path injection** — `--wordlist` + caps (`--max-wordlist-injections`, hard ceiling in expander).
 - [x] **Schema-aware body mutations** — omit required / wrong type / extra prop / long string; **`--max-body-mutations-per-op`** (default **0** to keep CI stable).
 
-**Next (F+ / E):** Redis/queues, campaign memory, deeper RESTler parity checkers (namespace replay), import curated SecLists slices by path only.
+**F+ shipped:** optional **`--campaign-memory`** merge file; **`--auth-alt`** + **`--namespace-replay-budget`**; **`--curated-wordlist`** tiny in-repo slice. **Milestone E** adds CI profile, validated jobs, file/Redis queues, worker/enqueue (`docs/MILESTONES.md` §E).
 
 ---
 
 ## Milestone E — Ops & memory (after F foundations)
 
-**Queues (Redis), vector memory, CI profile** — bounded campaigns and recall without bypassing checkers.
+**Goal:** Bounded campaigns at scale — **queues**, **recall**, **CI gates** — without bypassing checkers or turning Mythos into an unscoped scanner.
+
+**Done when (v0 shipped in-repo):**
+
+- [x] **CI profile** — `MYTHOS_CI=1` or **`--ci`**: tight caps, no LLM planner / AI hints / evidence-pack churn; **`--ci-fail-on-findings`** → exit **2** if any findings. Requires **`--openapi` or `--stub-plan`** + **`--target`** (non-interactive). See `src/ops/ciProfile.js`.
+- [x] **Campaign job envelope** — validated JSON (`version`, `target`, `openapiPath` or `useStubPlan`, caps) — `src/ops/campaignJob.js`, example `fixtures/mythos-campaign-job.example.json`.
+- [x] **Job queue** — default **filesystem** queue under **`MYTHOS_QUEUE_DIR`** (default `.mythos-queue/`); optional **Redis** when **`MYTHOS_REDIS_URL`** is set (`src/ops/fileQueue.js`, `redisQueue.js`, `queueFactory.js`).
+- [x] **Worker + enqueue CLIs** — `npm run mythos:enqueue -- <job.json>`, `npm run mythos:worker` (see `src/ops/enqueue.js`, `worker.js`); workers call the same **`runMythosPipeline`** via **`runCampaignJob`**.
+- [x] **Route recall (deterministic)** — **`rankRoutesFromCampaignMemory`** for prioritization from merged campaign memory JSON (no embedding vendor in v0) — `src/ops/routeMemoryRank.js`.
+
+**Also shipped (E hardening):**
+
+- [x] **Auth by reference** — campaign jobs may use **`authEnv`** / **`authAltEnv`** (uppercase env names); CLI **`--auth-env`** / **`--auth-alt-env`**. Inline **`auth`** / **`authAlt`** remains valid but cannot mix with env refs (`src/ops/authRefs.js`).
+- [x] **Redis durability** — jobs tracked in **`mythos:campaign:jobs:processing`** hash until complete/fail; **`mythos:campaign:jobs:done`** list stores success metadata (LRANGE inspectable); **`recoverProcessing()`** on worker start re-queues orphans.
+- [x] **File-queue recovery** — **`recoverStaleProcessing(ms)`** returns stuck **`processing/`** JSON to **`pending/`** (default threshold 30m, override **`MYTHOS_STALE_PROCESSING_MS`**).
+- [x] **CI scope gate (optional)** — **`MYTHOS_CI_REQUIRE_SCOPE`** / **`--ci-require-scope`** with **`--ci`**: fails if no **`--scope-file`** (predictable surface; not a substitute for legal authorization).
+
+**Later (E+):** blocking Redis consumer, embedding-backed ranker, hosted object store for full reports.
 
 ---
 

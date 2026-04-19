@@ -7,7 +7,7 @@ These rules prevent architectural drift when using AI assistants in Cursor.
 1. **Executor never imports LLM clients** (`openai`, `@anthropic-ai/sdk`, Gemini SDK, etc.). HTTP execution lives under `src/execution/`. **Chat completions** live only in **`src/planner/llmPlanner.js`** (plus env in **`llmEnv.js`**).
 2. **Planners emit only typed plans** — JSON matching `validatePlan()` in `src/planner/planSchema.js`. No free-form attack instructions consumed by the executor.
 3. **Plans are compiled, not trusted** — `src/planner/planCompiler.js` maps a validated plan to `FuzzCase[]` and rejects out-of-scope or malformed steps before any network I/O.
-4. **Scope and safety** — default to allowlist-friendly design: future `scope` file will gate hosts/paths; do not add “scan the whole internet” defaults.
+4. **Scope and safety** — **`scopePolicy`** gates hosts/paths (`--scope-file`); do not add “scan the whole internet” defaults. **`src/ops/`** wraps the same **`runMythosPipeline`** for CI/queues — workers must not bypass compilation or scope.
 
 ## Layering
 
@@ -23,5 +23,5 @@ Prefer **“typed plan” / “execution plan”** over vendor framework names. 
 
 ## Tests
 
-- **`npm test`** — `test:plan`, `test:openapi`, `test:graph`, **`test:chains`** (mocked fetch; no network).
+- **`npm test`** — includes plan/openapi/graph/chains, verifier/checkers (`test:milestone-d`, `test:checker-engine`), campaign memory / namespace overlap / hierarchy guards, **`test:milestone-e`** (CI + queues), **`test:auth-refs`** — see **`package.json`** (default **no outbound HTTP**).
 - When adding planner or compiler logic, extend **`scripts/verify-plan.mjs`** or add a focused script under **`scripts/`**.
