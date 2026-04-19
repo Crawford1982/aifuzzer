@@ -13,7 +13,14 @@
     "/posts": {
       "get": {
         "operationId": "listPosts",
-        "summary": "List posts"
+        "summary": "List posts",
+        "parameters": [
+          {
+            "name": "_limit",
+            "in": "query",
+            "schema": { "type": "integer" }
+          }
+        ]
       },
       "post": {
         "operationId": "createPost",

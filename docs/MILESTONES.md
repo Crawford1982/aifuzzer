@@ -34,7 +34,7 @@ Single source of truth for **delivery phases** and **exit criteria**. Implementa
 
 **Artifacts:** `src/state/`, `src/hypothesis/StatefulCampaignEngine.js`, `src/execution/SequenceExecutor.js`.
 
-**Explicit non-goals (still):** nested `/a/{id}/b` chaining, auth-scoped handle stores, response-schema `$ref` resolution.
+**Nested sub-resources (incremental):** `list_to_scoped_subresource`, `post_to_scoped_subresource`, `item_to_scoped_subresource` edges for paths like `/posts/{id}/comments` (see `dependencyGraph.js`). Still **non-goals:** auth-scoped handle stores, full `$ref` expansion, >2-hop chains in one compile.
 
 ---
 

@@ -15,6 +15,7 @@ import { attachEvidenceCurls } from '../verify/evidencePack.js';
 import { buildTransportOpts } from '../safety/executorContext.js';
 import { buildBaselineFingerprints } from '../verify/baseline.js';
 import { enrichFindingsWithConfidence } from '../verify/confidence.js';
+import { enrichFindingsWithStatistics } from '../verify/statsSignals.js';
 import { minimizationHint } from '../verify/minimize.js';
 import { buildHarLog, buildReplayBundle } from '../verify/evidenceExport.js';
 
@@ -42,6 +43,8 @@ function stripReplayBlob(r) {
  *   maxRps?: number,
  *   scopeFile?: string | null,
  *   evidencePack?: boolean,
+ *   maxResponseBodyChars?: number,
+ *   aiMutationHints?: boolean,
  * }} cfg
  */
 export async function runMythosPipeline(cfg) {
@@ -54,6 +57,14 @@ export async function runMythosPipeline(cfg) {
     scopePolicy: cfg.scopePolicy ?? null,
     maxRps: cfg.maxRps ?? 0,
   });
+
+  const previewCap =
+    cfg.maxResponseBodyChars != null && Number.isFinite(cfg.maxResponseBodyChars)
+      ? cfg.maxResponseBodyChars
+      : cfg.evidencePack
+        ? 262144
+        : 8192;
+  const bodyRead = { maxBodyPreviewChars: previewCap };
 
   const authHeaders = cfg.auth
     ? { Authorization: cfg.auth.startsWith('Bearer ') ? cfg.auth : `Bearer ${cfg.auth}` }
@@ -114,6 +125,7 @@ export async function runMythosPipeline(cfg) {
     model.observe({ kind: 'plan', ...activePlan });
     execResults = await executeCases(cases, {
       ...transport,
+      ...bodyRead,
       concurrency: cfg.concurrency,
     });
   } else if (spec) {
@@ -129,7 +141,7 @@ export async function runMythosPipeline(cfg) {
     const byId = new Map(spec.operations.map((o) => [o.operationId, o]));
     const chains = buildStatefulChains(spec, graph, { maxChains: 10 });
 
-    const execOpts = { ...transport };
+    const execOpts = { ...transport, ...bodyRead };
 
     /** @type {unknown[]} */
     let llmResults = [];
@@ -161,6 +173,7 @@ export async function runMythosPipeline(cfg) {
           llmCases = compiled.cases.slice(0, llmBudget);
           llmResults = await executeCases(llmCases, {
             ...transport,
+            ...bodyRead,
             concurrency: cfg.concurrency,
           });
           spent += llmResults.length;
@@ -206,18 +219,46 @@ export async function runMythosPipeline(cfg) {
 
     const remaining = Math.max(0, cfg.maxRequests - spent);
     const { expandFromOpenApi } = await import('../hypothesis/SpecHypothesisEngine.js');
+    const aiReserve = cfg.aiMutationHints ? Math.min(8, Math.max(0, Math.floor(remaining / 4))) : 0;
+    const flatBudget = Math.max(0, remaining - aiReserve);
+
+    /** @type {import('../hypothesis/HypothesisEngine.js').FuzzCase[]} */
+    let aiHintCases = [];
+    if (cfg.aiMutationHints && aiReserve > 0) {
+      const { requestMutationHintsFromLlm, hintsToFuzzCases } = await import(
+        '../planner/aiMutationAdvisor.js'
+      );
+      const hintsOut = await requestMutationHintsFromLlm({ spec, effectiveBaseUrl: surfaceTarget });
+      if (hintsOut.ok && hintsOut.hints?.length) {
+        aiHintCases = hintsToFuzzCases(spec, surfaceTarget, hintsOut.hints, { maxCases: aiReserve });
+        model.observe({
+          kind: 'ai_mutation_hints',
+          count: aiHintCases.length,
+          attempts: hintsOut.attempts,
+        });
+      } else {
+        model.observe({
+          kind: 'ai_mutation_hints_skipped',
+          reason: hintsOut.ok ? 'no_hints' : hintsOut.reason || 'unknown',
+          detail: hintsOut.detail || '',
+        });
+      }
+    }
+
     const flatCases = expandFromOpenApi(spec, surfaceTarget, {
-      maxRequests: remaining,
+      maxRequests: flatBudget,
       hasAuth: Boolean(cfg.auth),
     });
+    const mergedFlat = [...flatCases, ...aiHintCases].slice(0, remaining);
 
-    const flatResults = await executeCases(flatCases, {
+    const flatResults = await executeCases(mergedFlat, {
       ...transport,
+      ...bodyRead,
       concurrency: cfg.concurrency,
     });
 
     execResults = [...llmResults, ...chainFlatResults, ...flatResults];
-    cases = [...llmCases, ...chainCases, ...flatCases];
+    cases = [...llmCases, ...chainCases, ...mergedFlat];
   } else {
     const patterns = expandPatterns(cfg.target, { maxRequests: cfg.maxRequests });
     const remaining = Math.max(0, cfg.maxRequests - patterns.length);
@@ -228,6 +269,7 @@ export async function runMythosPipeline(cfg) {
     cases = [...patterns, ...authCases].slice(0, cfg.maxRequests);
     execResults = await executeCases(cases, {
       ...transport,
+      ...bodyRead,
       concurrency: cfg.concurrency,
     });
   }
@@ -253,6 +295,7 @@ export async function runMythosPipeline(cfg) {
     ...f,
     minimization: minimizationHint(casesById.get(f.caseId)),
   }));
+  findings = enrichFindingsWithStatistics(findings, execResults);
 
   const ts = Date.now();
   const generatedAt = new Date(ts).toISOString();
@@ -297,6 +340,8 @@ export async function runMythosPipeline(cfg) {
       maxRps: cfg.maxRps ?? 0,
       scopeFile: cfg.scopeFile || null,
       scopePolicy: Boolean(cfg.scopePolicy),
+      maxResponseBodyChars: previewCap,
+      aiMutationHints: Boolean(cfg.aiMutationHints),
     },
     verifier: {
       baselineRoutes: baselines.size,

@@ -16,8 +16,11 @@
     "test:scope-policy": "node scripts/test-scope-policy.mjs",
     "test:milestone-d": "node scripts/test-milestone-d-verify.mjs",
     "test:evidence-export": "node scripts/test-evidence-export.mjs",
+    "test:stats-signals": "node scripts/test-stats-signals.mjs",
+    "test:ai-advisor": "node scripts/test-ai-mutation-advisor.mjs",
+    "test:scoped-chain": "node scripts/test-scoped-chain.mjs",
     "test:llm-e2e": "node scripts/test-llm-e2e.mjs",
-    "test": "npm run test:plan && npm run test:openapi && npm run test:graph && npm run test:chains && npm run test:llm-plan && npm run test:scope-policy && npm run test:milestone-d && npm run test:evidence-export"
+    "test": "npm run test:plan && npm run test:openapi && npm run test:graph && npm run test:chains && npm run test:scoped-chain && npm run test:llm-plan && npm run test:scope-policy && npm run test:milestone-d && npm run test:evidence-export && npm run test:stats-signals && npm run test:ai-advisor"
   },
   "engines": {
     "node": ">=18"

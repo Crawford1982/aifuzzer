@@ -215,3 +215,39 @@ export function expandFromOpenApi(spec, baseUrl, opts) {
 
   return cases.slice(0, opts.maxRequests);
 }
+
+/**
+ * Build a one-off case (e.g. LLM-suggested query/header probe) with spec validation.
+ *
+ * @param {import('../openapi/OpenApiLoader.js').NormalizedOperation} op
+ * @param {string} baseUrl
+ * @param {string} id
+ * @param {string} family
+ * @param {Record<string, string>} extraQuery
+ * @param {Record<string, string>} [extraHeaders]
+ */
+export function makeFuzzCaseWithParamProbe(
+  op,
+  baseUrl,
+  id,
+  family,
+  extraQuery = {},
+  extraHeaders = {}
+) {
+  const pathVals = defaultPathValues(op);
+  const r = buildRequest({
+    baseUrl,
+    operation: op,
+    pathValues: pathVals,
+    queryExtras: extraQuery,
+  });
+  const h = { ...r.headers, ...extraHeaders };
+  return {
+    id,
+    method: op.method,
+    url: r.url,
+    headers: Object.keys(h).length ? h : {},
+    family,
+    meta: r.meta,
+  };
+}

@@ -16,6 +16,8 @@ export function parseArgv(argv) {
     useStubPlan: false,
     planWithLlm: false,
     evidencePack: false,
+    aiMutationHints: false,
+    maxResponseBodyChars: undefined,
     help: false,
   };
 
@@ -34,6 +36,8 @@ export function parseArgv(argv) {
     else if (a === '--stub-plan') args.useStubPlan = true;
     else if (a === '--plan-with-llm') args.planWithLlm = true;
     else if (a === '--evidence-pack') args.evidencePack = true;
+    else if (a === '--ai-mutation-hints') args.aiMutationHints = true;
+    else if (a === '--max-response-chars') args.maxResponseBodyChars = Number(argv[++i]);
   }
 
   return args;

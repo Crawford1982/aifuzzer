@@ -25,7 +25,13 @@ export function firstIdLikeFromObject(obj) {
   const keys = Object.keys(obj).sort();
   for (const k of keys) {
     if (/^(id)$/i.test(k)) priority.unshift([k, obj[k]]);
-    else if (/id$/i.test(k) || /^[a-z]+Id$/i.test(k)) priority.push([k, obj[k]]);
+    else if (
+      /id$/i.test(k) ||
+      /^[a-z]+Id$/i.test(k) ||
+      /^(slug|handle|uuid|ref|reference|code|key|name|token|urn)$/i.test(k)
+    ) {
+      priority.push([k, obj[k]]);
+    }
   }
   for (const [, v] of priority) {
     const coerced = coerceId(v);

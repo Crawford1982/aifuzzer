@@ -12,7 +12,12 @@ import { buildOperationUrl } from '../hypothesis/StatefulCampaignEngine.js';
 /**
  * @typedef {{
  *   chainId: string,
- *   kind: 'list_to_item' | 'post_to_item',
+ *   kind:
+ *     | 'list_to_item'
+ *     | 'post_to_item'
+ *     | 'list_to_scoped_subresource'
+ *     | 'post_to_scoped_subresource'
+ *     | 'item_to_scoped_subresource',
  *   viaParam: string,
  *   producerOp: import('../openapi/OpenApiLoader.js').NormalizedOperation,
  *   consumerOp: import('../openapi/OpenApiLoader.js').NormalizedOperation,
@@ -47,7 +52,11 @@ export function compileStatefulChain(chain, byId, baseUrl) {
     method: prod.method,
     buildUrl: () => buildOperationUrl(baseUrl, prod, defaultPathValues(prod)),
     omitAuth: false,
-    extract: edge.kind === 'list_to_item' ? 'array_first_id' : 'object_id',
+    extract:
+      edge.kind === 'list_to_item' ||
+      edge.kind === 'list_to_scoped_subresource'
+        ? 'array_first_id'
+        : 'object_id',
     family: 'CHAIN_PRODUCER',
   });
 
@@ -81,6 +90,7 @@ export function compileStatefulChain(chain, byId, baseUrl) {
  *   authHeader?: string | null,
  *   scopePolicy?: import('../safety/scopePolicy.js').ScopePolicy | null,
  *   rateLimiter?: { acquire: () => Promise<void> },
+ *   maxBodyPreviewChars?: number,
  * }} opts
  */
 export async function executeStatefulChain(compiled, opts) {

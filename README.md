@@ -45,6 +45,9 @@ npm start -- --target "https://jsonplaceholder.typicode.com" --openapi ./fixture
 # HAR + replay JSON next to mythos-report-*.json (same timestamp)
 npm start -- --target "https://jsonplaceholder.typicode.com" --openapi ./fixtures/minimal-posts.openapi.json --evidence-pack
 
+# Optional: LLM suggests extra query/header probes (MYTHOS_LLM_API_KEY); hints validated vs spec
+npm start -- --target "https://jsonplaceholder.typicode.com" --openapi ./fixtures/minimal-posts.openapi.json --ai-mutation-hints
+
 # OpenAPI-driven (JSON or YAML)
 npm start -- --target "https://jsonplaceholder.typicode.com" --openapi ./fixtures/minimal-posts.openapi.json
 
@@ -68,6 +71,9 @@ npm test
 | `npm run test:scope-policy` | Scope file load, host/path checks, redirect policy (offline). |
 | `npm run test:milestone-d` | Baseline map, confidence scoring, minimization hints (offline). |
 | `npm run test:evidence-export` | HAR + replay bundle builders (offline). |
+| `npm run test:scoped-chain` | Nested path chain: list → `/posts/{id}/comments` (mocked `fetch`). |
+| `npm run test:stats-signals` | Binomial route-level surprise for 5xx clusters (offline). |
+| `npm run test:ai-advisor` | LLM mutation hints → validated `OPENAPI_AI_HINT` cases (mocked provider). |
 | `npm run test:llm-e2e` | Optional real LLM call — set **`MYTHOS_E2E_LLM=1`** + `MYTHOS_LLM_API_KEY`; **not** in `npm test`. |
 | `npm run test:scope-lab-agent` | Optional integration with `cloud-brain-scope-lab` adapter (hits **jsonplaceholder** unless modified). |
 

@@ -32,6 +32,10 @@ Safety (v0.2):
 
 Milestone D — evidence export:
   --evidence-pack                 Write HAR 1.2 + structured replay JSON next to the report (same timestamp).
+  --max-response-chars <n>        Truncate stored response text to this many UTF-8 code units (default: 8192, or 262144 with --evidence-pack).
+
+AI-assisted fuzzing (OpenAPI, spec-only prompt; hints validated before HTTP):
+  --ai-mutation-hints            Ask the LLM for extra query/header probes (uses MYTHOS_LLM_*; capped budget).
 
 Examples:
   npm start -- --target "https://jsonplaceholder.typicode.com" --openapi ./spec/openapi.json
@@ -145,6 +149,10 @@ async function main() {
         useStubPlan: args.useStubPlan,
         planWithLlm: args.planWithLlm,
         evidencePack: args.evidencePack,
+        aiMutationHints: args.aiMutationHints,
+        maxResponseBodyChars: Number.isFinite(args.maxResponseBodyChars)
+          ? args.maxResponseBodyChars
+          : undefined,
         ...defaults,
       }
     : await promptConfig(defaults);
@@ -152,6 +160,8 @@ async function main() {
   if (args.scopeFile) config.scopeFile = args.scopeFile;
   config.maxRps = Number.isFinite(args.maxRps) ? args.maxRps : 0;
   if (args.evidencePack) config.evidencePack = true;
+  if (args.aiMutationHints) config.aiMutationHints = true;
+  if (Number.isFinite(args.maxResponseBodyChars)) config.maxResponseBodyChars = args.maxResponseBodyChars;
 
   const resolvedCli = resolveTargetUrl(config.target);
   if (!resolvedCli.ok) {
@@ -186,6 +196,9 @@ async function main() {
     maxRps: Number.isFinite(config.maxRps) ? config.maxRps : 0,
     scopeFile: config.scopeFile || null,
     evidencePack: Boolean(config.evidencePack),
+    aiMutationHints: Boolean(config.aiMutationHints),
+    maxResponseBodyChars:
+      Number.isFinite(config.maxResponseBodyChars) ? config.maxResponseBodyChars : undefined,
   });
 
   console.log(`\nReport written: ${outfile}`);

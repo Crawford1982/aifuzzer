@@ -20,6 +20,7 @@ import { assertUrlInScope, checkRedirectPolicy } from '../safety/scopePolicy.js'
  *   captureFullBody?: boolean,
  *   scopePolicy?: import('../safety/scopePolicy.js').ScopePolicy | null,
  *   rateLimiter?: { acquire: () => Promise<void> },
+ *   maxBodyPreviewChars?: number,
  * }} opts
  */
 export async function executeCases(cases, opts) {
@@ -37,6 +38,7 @@ export async function executeCases(cases, opts) {
  *   captureFullBody?: boolean,
  *   scopePolicy?: import('../safety/scopePolicy.js').ScopePolicy | null,
  *   rateLimiter?: { acquire: () => Promise<void> },
+ *   maxBodyPreviewChars?: number,
  * }} opts
  */
 export async function executeOne(c, opts) {
@@ -51,9 +53,14 @@ export async function executeOne(c, opts) {
  *   captureFullBody?: boolean,
  *   scopePolicy?: import('../safety/scopePolicy.js').ScopePolicy | null,
  *   rateLimiter?: { acquire: () => Promise<void> },
+ *   maxBodyPreviewChars?: number,
  * }} opts
  */
 async function runOne(c, opts) {
+  const previewCap = Math.min(
+    Math.max(512, opts.maxBodyPreviewChars ?? 8192),
+    2_000_000
+  );
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), opts.timeoutMs);
   const headers = { ...(c.headers || {}) };
@@ -126,7 +133,7 @@ async function runOne(c, opts) {
         status: res.status,
         elapsedMs: Date.now() - started,
         headers: sanitizeHeaders(Object.fromEntries(res.headers)),
-        bodyPreview: bodyText.slice(0, 400),
+        bodyPreview: bodyText.slice(0, previewCap),
         bodyBytes: Buffer.byteLength(bodyText, 'utf8'),
         error: `redirect_policy:${rd.reason}${rd.location ? ` → ${rd.location}` : ''}`,
       };
@@ -145,7 +152,7 @@ async function runOne(c, opts) {
       status: res.status,
       elapsedMs: elapsed,
       headers: sanitizeHeaders(Object.fromEntries(res.headers)),
-      bodyPreview: bodyText.slice(0, 1200),
+      bodyPreview: bodyText.slice(0, previewCap),
       ...(cap ? { fullBody: bodyText } : {}),
       bodyBytes: Buffer.byteLength(bodyText, 'utf8'),
       error: null,
