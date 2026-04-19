@@ -15,6 +15,7 @@ export function parseArgv(argv) {
     maxRps: 0,
     useStubPlan: false,
     planWithLlm: false,
+    evidencePack: false,
     help: false,
   };
 
@@ -32,6 +33,7 @@ export function parseArgv(argv) {
     else if (a === '--max-rps') args.maxRps = Number(argv[++i]);
     else if (a === '--stub-plan') args.useStubPlan = true;
     else if (a === '--plan-with-llm') args.planWithLlm = true;
+    else if (a === '--evidence-pack') args.evidencePack = true;
   }
 
   return args;

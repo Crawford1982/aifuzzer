@@ -16,6 +16,7 @@ import { buildTransportOpts } from '../safety/executorContext.js';
 import { buildBaselineFingerprints } from '../verify/baseline.js';
 import { enrichFindingsWithConfidence } from '../verify/confidence.js';
 import { minimizationHint } from '../verify/minimize.js';
+import { buildHarLog, buildReplayBundle } from '../verify/evidenceExport.js';
 
 /**
  * @param {unknown} r
@@ -40,6 +41,7 @@ function stripReplayBlob(r) {
  *   scopePolicy?: import('../safety/scopePolicy.js').ScopePolicy | null,
  *   maxRps?: number,
  *   scopeFile?: string | null,
+ *   evidencePack?: boolean,
  * }} cfg
  */
 export async function runMythosPipeline(cfg) {
@@ -252,8 +254,30 @@ export async function runMythosPipeline(cfg) {
     minimization: minimizationHint(casesById.get(f.caseId)),
   }));
 
+  const ts = Date.now();
+  const generatedAt = new Date(ts).toISOString();
+  const outDir = ensureOutputDir(cfg.outputDir);
+
+  /** @type {{ har: string, replay: string } | null} */
+  let evidencePack = null;
+  if (cfg.evidencePack) {
+    const harPath = path.join(outDir, `mythos-evidence-${ts}.har`);
+    const replayPath = path.join(outDir, `mythos-replay-${ts}.json`);
+    const har = buildHarLog(execResults, casesById, {
+      generatedAt,
+      authHeader: cfg.auth ?? null,
+    });
+    const bundle = buildReplayBundle(execResults, casesById, {
+      generatedAt,
+      authHeader: cfg.auth ?? null,
+    });
+    fs.writeFileSync(harPath, JSON.stringify(har, null, 2));
+    fs.writeFileSync(replayPath, JSON.stringify(bundle, null, 2));
+    evidencePack = { har: harPath, replay: replayPath };
+  }
+
   const report = {
-    generatedAt: new Date().toISOString(),
+    generatedAt,
     target: cfg.target,
     effectiveBaseUrl: surfaceTarget,
     mode: cfg.useStubPlan
@@ -276,7 +300,9 @@ export async function runMythosPipeline(cfg) {
     },
     verifier: {
       baselineRoutes: baselines.size,
+      evidenceExport: Boolean(cfg.evidencePack),
     },
+    evidencePack,
     surfaceSummary: {
       origin: surface.origin,
       probeCount: surface.probes.length,
@@ -289,8 +315,7 @@ export async function runMythosPipeline(cfg) {
     raw: sanitizedRaw,
   };
 
-  const outDir = ensureOutputDir(cfg.outputDir);
-  const outfile = path.join(outDir, `mythos-report-${Date.now()}.json`);
+  const outfile = path.join(outDir, `mythos-report-${ts}.json`);
   fs.writeFileSync(outfile, JSON.stringify(report, null, 2));
 
   return { outfile, report };

@@ -2,7 +2,7 @@
 
 Single source of truth for **delivery phases** and **exit criteria**. Implementation details live in code; this file tracks **what “done” means**.
 
-**Tests (regression):** `npm test` — see `package.json` (offline; no API keys). **A–D** on `main` are expected to pass on every push. **B** is `test:chains`. **C** is `test:llm-plan`. **D** is `test:milestone-d` + `test:scope-policy`. Optional live LLM: `MYTHOS_E2E_LLM=1 npm run test:llm-e2e`.
+**Tests (regression):** `npm test` — see `package.json` (offline; no API keys). **A–D** on `main` are expected to pass on every push. **B** is `test:chains`. **C** is `test:llm-plan`. **D** is `test:milestone-d`, `test:scope-policy`, `test:evidence-export`. Optional live LLM: `MYTHOS_E2E_LLM=1 npm run test:llm-e2e`.
 
 ---
 
@@ -71,7 +71,7 @@ Single source of truth for **delivery phases** and **exit criteria**. Implementa
 - [x] **Baseline fingerprints** per canonical route from first `OPENAPI_BASELINE` / `BASELINE` successes (`src/verify/baseline.js`).
 - [x] **Confidence** from signals only — status, severity, baseline body hash diff, redirect policy (`src/verify/confidence.js`); attached to report `findings[]`.
 - [x] **Minimization hints** — query-noise stripping suggestions where applicable (`src/verify/minimize.js`).
-- [ ] Evidence pack export (HAR / structured replay bundle) beyond curl strings — future.
+- [x] **Evidence export** — HAR 1.2 + structured replay JSON (`src/verify/evidenceExport.js`); CLI **`--evidence-pack`** writes files next to the report (same timestamp); response bodies are preview-sized unless chain capture expanded them.
 
 **Related:** CI runs `npm test` on PRs to `main` (`.github/workflows/ci.yml`).
 

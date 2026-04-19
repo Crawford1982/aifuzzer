@@ -30,6 +30,9 @@ Safety (v0.2):
   --scope-file <path>             Host + path-prefix allowlist (YAML/JSON); block out-of-scope requests early.
   --max-rps <n>                   Global token-bucket cap (0 = unlimited).
 
+Milestone D — evidence export:
+  --evidence-pack                 Write HAR 1.2 + structured replay JSON next to the report (same timestamp).
+
 Examples:
   npm start -- --target "https://jsonplaceholder.typicode.com" --openapi ./spec/openapi.json
   npm start -- --target "https://jsonplaceholder.typicode.com" --stub-plan
@@ -141,12 +144,14 @@ async function main() {
         maxRps: Number.isFinite(args.maxRps) ? args.maxRps : 0,
         useStubPlan: args.useStubPlan,
         planWithLlm: args.planWithLlm,
+        evidencePack: args.evidencePack,
         ...defaults,
       }
     : await promptConfig(defaults);
 
   if (args.scopeFile) config.scopeFile = args.scopeFile;
   config.maxRps = Number.isFinite(args.maxRps) ? args.maxRps : 0;
+  if (args.evidencePack) config.evidencePack = true;
 
   const resolvedCli = resolveTargetUrl(config.target);
   if (!resolvedCli.ok) {
@@ -180,9 +185,14 @@ async function main() {
     scopePolicy,
     maxRps: Number.isFinite(config.maxRps) ? config.maxRps : 0,
     scopeFile: config.scopeFile || null,
+    evidencePack: Boolean(config.evidencePack),
   });
 
   console.log(`\nReport written: ${outfile}`);
+  if (report.evidencePack?.har && report.evidencePack?.replay) {
+    console.log(`Evidence HAR: ${report.evidencePack.har}`);
+    console.log(`Evidence replay JSON: ${report.evidencePack.replay}`);
+  }
   console.log(`Executed requests: ${report.executed}`);
   console.log(`Findings (heuristic): ${report.findings.length}`);
   if (report.findings.length) {
