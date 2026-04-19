@@ -13,8 +13,8 @@ const validPlan = {
   goal: 'ci_chain',
   attackClass: 'MOCK_LLM',
   sequence: [
-    { id: 's1', method: 'GET', pathTemplate: '/posts/1' },
-    { id: 's2', method: 'GET', pathTemplate: '/posts/1/comments' },
+    { id: 's1', method: 'GET', pathTemplate: '/posts' },
+    { id: 's2', method: 'GET', pathTemplate: '/posts/{id}' },
   ],
 };
 

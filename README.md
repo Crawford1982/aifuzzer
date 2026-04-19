@@ -39,6 +39,9 @@ npm start -- --target "https://api.example.com/me" --auth "YOUR_TOKEN"
 # Tune concurrency / cap
 npm start -- --target "URL" --concurrency 3 --max-requests 80
 
+# Scope + rate limit (see fixtures/mythos-scope.example.yaml)
+npm start -- --target "https://jsonplaceholder.typicode.com" --openapi ./fixtures/minimal-posts.openapi.json --scope-file ./fixtures/mythos-scope.example.yaml --max-rps 5
+
 # OpenAPI-driven (JSON or YAML)
 npm start -- --target "https://jsonplaceholder.typicode.com" --openapi ./fixtures/minimal-posts.openapi.json
 
@@ -59,6 +62,9 @@ npm test
 | `npm run test:graph` | `fixtures/minimal-posts.openapi.json` yields **list→item** and **POST→item** edges. |
 | `npm run test:chains` | Mocked `fetch`: **POST `/posts`** → `{ id }` → **GET `/posts/{id}`** (offline). |
 | `npm run test:llm-plan` | Mocked chat completions — **`llmPlanner`** → **`validatePlan`** (offline). |
+| `npm run test:scope-policy` | Scope file load, host/path checks, redirect policy (offline). |
+| `npm run test:milestone-d` | Baseline map, confidence scoring, minimization hints (offline). |
+| `npm run test:llm-e2e` | Optional real LLM call — set **`MYTHOS_E2E_LLM=1`** + `MYTHOS_LLM_API_KEY`; **not** in `npm test`. |
 | `npm run test:scope-lab-agent` | Optional integration with `cloud-brain-scope-lab` adapter (hits **jsonplaceholder** unless modified). |
 
 Fixtures live under **`fixtures/`** — `minimal-posts.openapi.json` includes **`POST /posts`** (`createPost`) alongside list/get routes for **`post_to_item`** chains.

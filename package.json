@@ -13,7 +13,10 @@
     "test:graph": "node scripts/test-dependency-graph.mjs",
     "test:chains": "node scripts/test-chains.mjs",
     "test:llm-plan": "node scripts/test-llm-planner.mjs",
-    "test": "npm run test:plan && npm run test:openapi && npm run test:graph && npm run test:chains && npm run test:llm-plan"
+    "test:scope-policy": "node scripts/test-scope-policy.mjs",
+    "test:milestone-d": "node scripts/test-milestone-d-verify.mjs",
+    "test:llm-e2e": "node scripts/test-llm-e2e.mjs",
+    "test": "npm run test:plan && npm run test:openapi && npm run test:graph && npm run test:chains && npm run test:llm-plan && npm run test:scope-policy && npm run test:milestone-d"
   },
   "engines": {
     "node": ">=18"

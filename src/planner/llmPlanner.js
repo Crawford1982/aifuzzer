@@ -1,6 +1,7 @@
 /**
  * Bounded LLM planner — ONLY module that performs chat HTTP to the model provider.
  * Target API traffic stays in execution/HttpFuzzAgent + SequenceExecutor.
+ * User prompt is spec metadata only (no response body / trace dumps).
  */
 
 import { validatePlan } from './planSchema.js';
@@ -8,35 +9,52 @@ import { getLlmEnv } from './llmEnv.js';
 
 /**
  * @param {import('../openapi/OpenApiLoader.js').NormalizedSpec} spec
+ */
+export function listAllowedPathTemplates(spec) {
+  return spec.operations.map((o) => o.pathTemplate);
+}
+
+/**
+ * @param {import('../openapi/OpenApiLoader.js').NormalizedSpec} spec
  * @param {string} effectiveBaseUrl
  * @param {import('../state/dependencyGraph.js').ProducerConsumerEdge[]} edges
  */
 export function buildPlannerPrompt(spec, effectiveBaseUrl, edges) {
+  const pathAllow = listAllowedPathTemplates(spec);
+  const uniquePaths = [...new Set(pathAllow)];
+
   const lines = spec.operations.map(
-    (o) => `${o.method} ${o.pathTemplate}  (${o.operationId})`
+    (o) => `${o.method} ${o.pathTemplate}  (operationId: ${o.operationId})`
   );
   const edgeLines = edges.map(
     (e) => `${e.kind}: ${e.producerId} → ${e.consumerId} via ${e.viaParam}`
   );
 
   return [
-    `Effective API base (all pathTemplate URLs must resolve under this origin): ${effectiveBaseUrl}`,
+    `Effective API base: ${effectiveBaseUrl}`,
+    'All pathTemplate values in the plan MUST be EXACTLY one of the strings in the allowlist below (character-for-character, including leading /).',
     '',
-    'Operations:',
+    'pathTemplate allowlist:',
+    ...uniquePaths.map((p) => `- ${p}`),
+    '',
+    'Operations (use only these; do not add parameters or paths not in the allowlist):',
     ...lines.map((l) => `- ${l}`),
     '',
-    'Inferred dependency edges:',
+    'Inferred dependency edges (for ordering only):',
     ...(edgeLines.length ? edgeLines.map((l) => `- ${l}`) : ['- (none)']),
     '',
     'Emit ONE JSON object: ExecutionPlan version "1" with sequence[] of steps.',
-    'Each step: id, method, pathTemplate starting with /, optional omitAuth/query/jsonBody.',
-    'Prefer 2–6 steps that exercise a realistic chain using operations above.',
-    'Do not invent paths that are not listed.',
+    'Each step: id, method, pathTemplate (from allowlist only), optional omitAuth/query/jsonBody.',
+    '2–6 steps. Do not include any user data, response bodies, or tokens in the JSON.',
   ].join('\n');
 }
 
-const SYSTEM = `You are a security-aware API test planner. Output ONLY valid JSON — no markdown, no prose — matching this shape:
-{"version":"1","goal":"string","attackClass":"string","risk":"low"|"medium"|"high"|omit,"sequence":[{"id":"string","method":"GET|POST|PUT|PATCH|DELETE","pathTemplate":"/path","omitAuth":false,"query":{},"jsonBody":null}]}`;
+const SYSTEM = `You are a security test planner. You ONLY output a single JSON object, no markdown.
+Rules:
+- version must be "1"
+- Every sequence[].pathTemplate must be EXACTLY one of the path strings from the user allowlist (no new paths, no extra path segments).
+- Use only methods and paths that exist in the operation list.
+- No natural language inside JSON string values except short goal/attackClass labels.`;
 
 /**
  * @param {string} text
@@ -136,6 +154,13 @@ export async function requestExecutionPlanFromLlm(ctx) {
     const v = validatePlan(parsed);
     if (!v.ok || !v.plan) {
       validationErrors.push(...v.errors);
+      continue;
+    }
+
+    const allowed = new Set(listAllowedPathTemplates(ctx.spec));
+    const badStep = v.plan.sequence.find((s) => !allowed.has(s.pathTemplate));
+    if (badStep) {
+      validationErrors.push(`pathTemplate not in allowlist: ${badStep.pathTemplate}`);
       continue;
     }
 

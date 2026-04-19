@@ -13,6 +13,7 @@ Mythos fuzzer — authorized testing only.
 Usage:
   npm start -- --target <base-url> [--openapi <spec.json|yaml>] [--stub-plan]
   npm start -- --target <url> [--auth <token>] [--concurrency N] [--max-requests N]
+                                   [--scope-file <scope.yaml|json>] [--max-rps N]
   npm start                       # interactive mode
 
 OpenAPI mode:
@@ -24,6 +25,10 @@ Stub typed plan (compiler + executor smoke, no LLM):
 Bounded LLM planner (Milestone C — requires API key in env):
   --plan-with-llm                 With --openapi: ask LLM for one ExecutionPlan, validate, run a capped slice,
                                    then continue with stateful chains + flat expansion. Uses MYTHOS_LLM_* env vars.
+
+Safety (v0.2):
+  --scope-file <path>             Host + path-prefix allowlist (YAML/JSON); block out-of-scope requests early.
+  --max-rps <n>                   Global token-bucket cap (0 = unlimited).
 
 Examples:
   npm start -- --target "https://jsonplaceholder.typicode.com" --openapi ./spec/openapi.json
@@ -132,11 +137,16 @@ async function main() {
         target: args.target,
         auth: args.auth || null,
         openapiPath: args.openapiPath,
+        scopeFile: args.scopeFile || null,
+        maxRps: Number.isFinite(args.maxRps) ? args.maxRps : 0,
         useStubPlan: args.useStubPlan,
         planWithLlm: args.planWithLlm,
         ...defaults,
       }
     : await promptConfig(defaults);
+
+  if (args.scopeFile) config.scopeFile = args.scopeFile;
+  config.maxRps = Number.isFinite(args.maxRps) ? args.maxRps : 0;
 
   const resolvedCli = resolveTargetUrl(config.target);
   if (!resolvedCli.ok) {
@@ -144,6 +154,18 @@ async function main() {
     process.exit(1);
   }
   config.target = resolvedCli.url;
+
+  /** @type {import('./safety/scopePolicy.js').ScopePolicy | null} */
+  let scopePolicy = null;
+  if (config.scopeFile) {
+    const { loadScopePolicy } = await import('./safety/scopePolicy.js');
+    try {
+      scopePolicy = loadScopePolicy(config.scopeFile, config.target);
+    } catch (e) {
+      console.error((/** @type {Error} */ (e)).message || e);
+      process.exit(1);
+    }
+  }
 
   const { outfile, report } = await runMythosPipeline({
     target: config.target,
@@ -155,6 +177,9 @@ async function main() {
     openapiPath: config.openapiPath || null,
     useStubPlan: Boolean(config.useStubPlan),
     planWithLlm: Boolean(config.planWithLlm),
+    scopePolicy,
+    maxRps: Number.isFinite(config.maxRps) ? config.maxRps : 0,
+    scopeFile: config.scopeFile || null,
   });
 
   console.log(`\nReport written: ${outfile}`);

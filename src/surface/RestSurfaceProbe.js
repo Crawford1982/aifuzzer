@@ -3,6 +3,8 @@
  * Enumerate lightweight probes and capture observable facts only.
  */
 
+import { assertUrlInScope } from '../safety/scopePolicy.js';
+
 function joinUrl(origin, pathname) {
   const p = pathname.startsWith('/') ? pathname : `/${pathname}`;
   return `${origin}${p}`;
@@ -12,7 +14,12 @@ function joinUrl(origin, pathname) {
 
 /**
  * @param {string} targetUrl full URL or template with `{id}`
- * @param {{ headers?: Record<string,string>, timeoutMs: number }} opts
+ * @param {{
+ *   headers?: Record<string,string>,
+ *   timeoutMs: number,
+ *   scopePolicy?: import('../safety/scopePolicy.js').ScopePolicy | null,
+ *   rateLimiter?: { acquire: () => Promise<void> },
+ * }} opts
  * @returns {Promise<{ origin: string, probes: Probe[], template: boolean }>}
  */
 export async function probeRestSurface(targetUrl, opts) {
@@ -51,6 +58,11 @@ export async function probeRestSurface(targetUrl, opts) {
   const probes = [];
 
   for (const url of urls) {
+    if (opts.scopePolicy) {
+      const sc = assertUrlInScope(url, opts.scopePolicy);
+      if (!sc.ok) continue;
+    }
+    await opts.rateLimiter?.acquire?.();
     probes.push(await fetchProbe(url, opts));
   }
 

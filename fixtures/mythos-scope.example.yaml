@@ -1,0 +1,10 @@
+# Example scope policy (v0.2) — copy and pass: npm start -- --scope-file ./my-scope.yaml --target ...
+# allowHosts: only these hostnames receive traffic (defaults to target hostname if omitted).
+# pathPrefixes: request path must start with one of these (default ['/']).
+
+allowHosts:
+  - jsonplaceholder.typicode.com
+pathPrefixes:
+  - /posts
+# Treat redirect Location to a host not in allowHosts as out-of-scope (default true).
+blockCrossHostRedirects: true

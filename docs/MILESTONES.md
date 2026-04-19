@@ -2,7 +2,7 @@
 
 Single source of truth for **delivery phases** and **exit criteria**. Implementation details live in code; this file tracks **what “done” means**.
 
-**Tests (regression):** `npm test` → `test:plan`, `test:openapi`, `test:graph`, `test:chains`, `test:llm-plan` (all offline; no API keys). **Milestones A–C** on `main` are expected to pass this suite on every push. **B** in particular is covered by `test:chains` (stateful binding). **C** is covered by `test:llm-plan` (planner + `validatePlan` with mocked provider).
+**Tests (regression):** `npm test` — see `package.json` (offline; no API keys). **A–D** on `main` are expected to pass on every push. **B** is `test:chains`. **C** is `test:llm-plan`. **D** is `test:milestone-d` + `test:scope-policy`. Optional live LLM: `MYTHOS_E2E_LLM=1 npm run test:llm-e2e`.
 
 ---
 
@@ -64,13 +64,16 @@ Single source of truth for **delivery phases** and **exit criteria**. Implementa
 
 ## Milestone D — Verifier-first (hard evidence)
 
-**Goal:** Deterministic replay, minimization, confidence scoring—not model opinions.
+**Goal:** Deterministic replay hints, baseline diff, confidence scoring—not model opinions.
 
-**Planned:**
+**Done when:**
 
-- [ ] Minimize failing sequences; baseline diff; optional cross-session swap.
-- [ ] Confidence score from deterministic signals only.
-- [ ] Evidence pack export (HAR / structured replay bundle) beyond curl strings.
+- [x] **Baseline fingerprints** per canonical route from first `OPENAPI_BASELINE` / `BASELINE` successes (`src/verify/baseline.js`).
+- [x] **Confidence** from signals only — status, severity, baseline body hash diff, redirect policy (`src/verify/confidence.js`); attached to report `findings[]`.
+- [x] **Minimization hints** — query-noise stripping suggestions where applicable (`src/verify/minimize.js`).
+- [ ] Evidence pack export (HAR / structured replay bundle) beyond curl strings — future.
+
+**Related:** CI runs `npm test` on PRs to `main` (`.github/workflows/ci.yml`).
 
 ---
 

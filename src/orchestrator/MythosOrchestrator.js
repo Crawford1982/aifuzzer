@@ -12,6 +12,10 @@ import { executeCases, ensureOutputDir } from '../execution/HttpFuzzAgent.js';
 import { ResponseIndex } from '../feedback/ResponseIndex.js';
 import { triageResults } from '../verify/BasicTriage.js';
 import { attachEvidenceCurls } from '../verify/evidencePack.js';
+import { buildTransportOpts } from '../safety/executorContext.js';
+import { buildBaselineFingerprints } from '../verify/baseline.js';
+import { enrichFindingsWithConfidence } from '../verify/confidence.js';
+import { minimizationHint } from '../verify/minimize.js';
 
 /**
  * @param {unknown} r
@@ -33,11 +37,21 @@ function stripReplayBlob(r) {
  *   openapiPath?: string | null,
  *   useStubPlan?: boolean,
  *   planWithLlm?: boolean,
+ *   scopePolicy?: import('../safety/scopePolicy.js').ScopePolicy | null,
+ *   maxRps?: number,
+ *   scopeFile?: string | null,
  * }} cfg
  */
 export async function runMythosPipeline(cfg) {
   const model = new SemanticModel();
   const index = new ResponseIndex();
+
+  const transport = buildTransportOpts({
+    timeoutMs: cfg.timeoutMs,
+    authHeader: cfg.auth ?? null,
+    scopePolicy: cfg.scopePolicy ?? null,
+    maxRps: cfg.maxRps ?? 0,
+  });
 
   const authHeaders = cfg.auth
     ? { Authorization: cfg.auth.startsWith('Bearer ') ? cfg.auth : `Bearer ${cfg.auth}` }
@@ -63,6 +77,8 @@ export async function runMythosPipeline(cfg) {
   const surface = await probeRestSurface(surfaceTarget, {
     headers: authHeaders,
     timeoutMs: cfg.timeoutMs,
+    scopePolicy: cfg.scopePolicy ?? null,
+    rateLimiter: transport.rateLimiter,
   });
 
   model.observe({ kind: 'surface', surface });
@@ -95,9 +111,8 @@ export async function runMythosPipeline(cfg) {
     activePlan = { source: 'stub', ...plan };
     model.observe({ kind: 'plan', ...activePlan });
     execResults = await executeCases(cases, {
+      ...transport,
       concurrency: cfg.concurrency,
-      timeoutMs: cfg.timeoutMs,
-      authHeader: cfg.auth || null,
     });
   } else if (spec) {
     const { inferProducerConsumerEdges } = await import('../state/dependencyGraph.js');
@@ -112,7 +127,7 @@ export async function runMythosPipeline(cfg) {
     const byId = new Map(spec.operations.map((o) => [o.operationId, o]));
     const chains = buildStatefulChains(spec, graph, { maxChains: 10 });
 
-    const execOpts = { timeoutMs: cfg.timeoutMs, authHeader: cfg.auth || null };
+    const execOpts = { ...transport };
 
     /** @type {unknown[]} */
     let llmResults = [];
@@ -143,9 +158,8 @@ export async function runMythosPipeline(cfg) {
           );
           llmCases = compiled.cases.slice(0, llmBudget);
           llmResults = await executeCases(llmCases, {
+            ...transport,
             concurrency: cfg.concurrency,
-            timeoutMs: cfg.timeoutMs,
-            authHeader: cfg.auth || null,
           });
           spent += llmResults.length;
           activePlan = {
@@ -196,9 +210,8 @@ export async function runMythosPipeline(cfg) {
     });
 
     const flatResults = await executeCases(flatCases, {
+      ...transport,
       concurrency: cfg.concurrency,
-      timeoutMs: cfg.timeoutMs,
-      authHeader: cfg.auth || null,
     });
 
     execResults = [...llmResults, ...chainFlatResults, ...flatResults];
@@ -212,9 +225,8 @@ export async function runMythosPipeline(cfg) {
     });
     cases = [...patterns, ...authCases].slice(0, cfg.maxRequests);
     execResults = await executeCases(cases, {
+      ...transport,
       concurrency: cfg.concurrency,
-      timeoutMs: cfg.timeoutMs,
-      authHeader: cfg.auth || null,
     });
   }
 
@@ -233,7 +245,12 @@ export async function runMythosPipeline(cfg) {
     index.score(key);
   }
 
-  const findings = triageResults(execResults);
+  const baselines = buildBaselineFingerprints(execResults);
+  let findings = triageResults(execResults);
+  findings = enrichFindingsWithConfidence(findings, execResults, baselines).map((f) => ({
+    ...f,
+    minimization: minimizationHint(casesById.get(f.caseId)),
+  }));
 
   const report = {
     generatedAt: new Date().toISOString(),
@@ -253,6 +270,12 @@ export async function runMythosPipeline(cfg) {
       maxRequests: cfg.maxRequests,
       concurrency: cfg.concurrency,
       timeoutMs: cfg.timeoutMs,
+      maxRps: cfg.maxRps ?? 0,
+      scopeFile: cfg.scopeFile || null,
+      scopePolicy: Boolean(cfg.scopePolicy),
+    },
+    verifier: {
+      baselineRoutes: baselines.size,
     },
     surfaceSummary: {
       origin: surface.origin,

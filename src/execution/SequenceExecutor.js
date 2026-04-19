@@ -76,7 +76,12 @@ export function compileStatefulChain(chain, byId, baseUrl) {
 
 /**
  * @param {CompiledStatefulChain} compiled
- * @param {{ timeoutMs: number, authHeader?: string | null }} opts
+ * @param {{
+ *   timeoutMs: number,
+ *   authHeader?: string | null,
+ *   scopePolicy?: import('../safety/scopePolicy.js').ScopePolicy | null,
+ *   rateLimiter?: { acquire: () => Promise<void> },
+ * }} opts
  */
 export async function executeStatefulChain(compiled, opts) {
   /** @type {Record<string, string>} */

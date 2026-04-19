@@ -5,13 +5,22 @@
 import fs from 'fs';
 import path from 'path';
 
+import { assertUrlInScope, checkRedirectPolicy } from '../safety/scopePolicy.js';
+
 /**
  * @typedef {import('../hypothesis/HypothesisEngine.js').FuzzCase} FuzzCase
  */
 
 /**
  * @param {FuzzCase[]} cases
- * @param {{ concurrency: number, timeoutMs: number, authHeader?: string | null, captureFullBody?: boolean }} opts
+ * @param {{
+ *   concurrency: number,
+ *   timeoutMs: number,
+ *   authHeader?: string | null,
+ *   captureFullBody?: boolean,
+ *   scopePolicy?: import('../safety/scopePolicy.js').ScopePolicy | null,
+ *   rateLimiter?: { acquire: () => Promise<void> },
+ * }} opts
  */
 export async function executeCases(cases, opts) {
   const results = await runPool(cases, opts.concurrency, (c) => runOne(c, opts));
@@ -22,7 +31,13 @@ export async function executeCases(cases, opts) {
  * Single request (for stateful chains). Same transport rules as concurrent pool.
  *
  * @param {FuzzCase} c
- * @param {{ timeoutMs: number, authHeader?: string | null, captureFullBody?: boolean }} opts
+ * @param {{
+ *   timeoutMs: number,
+ *   authHeader?: string | null,
+ *   captureFullBody?: boolean,
+ *   scopePolicy?: import('../safety/scopePolicy.js').ScopePolicy | null,
+ *   rateLimiter?: { acquire: () => Promise<void> },
+ * }} opts
  */
 export async function executeOne(c, opts) {
   return runOne(c, opts);
@@ -30,7 +45,13 @@ export async function executeOne(c, opts) {
 
 /**
  * @param {FuzzCase} c
- * @param {{ timeoutMs: number, authHeader?: string | null, captureFullBody?: boolean }} opts
+ * @param {{
+ *   timeoutMs: number,
+ *   authHeader?: string | null,
+ *   captureFullBody?: boolean,
+ *   scopePolicy?: import('../safety/scopePolicy.js').ScopePolicy | null,
+ *   rateLimiter?: { acquire: () => Promise<void> },
+ * }} opts
  */
 async function runOne(c, opts) {
   const ctrl = new AbortController();
@@ -51,6 +72,25 @@ async function runOne(c, opts) {
     for (const [k, v] of Object.entries(c.meta.query)) u.searchParams.set(k, String(v));
     url = u.toString();
   }
+
+  const scopeCheck = assertUrlInScope(url, opts.scopePolicy);
+  if (!scopeCheck.ok) {
+    clearTimeout(t);
+    return {
+      caseId: c.id,
+      family: c.family,
+      method: c.method || 'GET',
+      url,
+      status: null,
+      elapsedMs: 0,
+      headers: {},
+      bodyPreview: '',
+      bodyBytes: 0,
+      error: `out_of_scope:${scopeCheck.reason}`,
+    };
+  }
+
+  await opts.rateLimiter?.acquire?.();
 
   /** @type {string | undefined} */
   let body;
@@ -73,6 +113,25 @@ async function runOne(c, opts) {
       signal: ctrl.signal,
       ...(body !== undefined ? { body } : {}),
     });
+
+    const rd = checkRedirectPolicy(url, res.status, res.headers, opts.scopePolicy);
+    if (!rd.ok) {
+      const bodyText = await res.text();
+      clearTimeout(t);
+      return {
+        caseId: c.id,
+        family: c.family,
+        method: c.method || 'GET',
+        url,
+        status: res.status,
+        elapsedMs: Date.now() - started,
+        headers: sanitizeHeaders(Object.fromEntries(res.headers)),
+        bodyPreview: bodyText.slice(0, 400),
+        bodyBytes: Buffer.byteLength(bodyText, 'utf8'),
+        error: `redirect_policy:${rd.reason}${rd.location ? ` → ${rd.location}` : ''}`,
+      };
+    }
+
     const bodyText = await res.text();
     clearTimeout(t);
     const elapsed = Date.now() - started;
