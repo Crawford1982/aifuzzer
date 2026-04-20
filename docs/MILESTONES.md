@@ -90,7 +90,7 @@ Single source of truth for **delivery phases** and **exit criteria**. Implementa
 - [x] **Optional wordlist path injection** — `--wordlist` + caps (`--max-wordlist-injections`, hard ceiling in expander).
 - [x] **Schema-aware body mutations** — omit required / wrong type / extra prop / long string; **`--max-body-mutations-per-op`** (default **0** to keep CI stable).
 
-**F+ shipped:** optional **`--campaign-memory`** merge file; **`--auth-alt`** + **`--namespace-replay-budget`**; **`--curated-wordlist`** tiny in-repo slice. **Milestone E** adds CI profile, validated jobs, file/Redis queues, worker/enqueue (`docs/MILESTONES.md` §E).
+**F+ shipped:** optional **`--campaign-memory`** merge file; **`--auth-alt`** + **`--namespace-replay-budget`**; **`--curated-wordlist`** tiny in-repo slice. **Hierarchy heuristic refinement:** `resource_hierarchy_cross_parent` compares **`canonicalUrlForHierarchyCompare`** (strips Mythos probe-only query keys: `debug`, `trace`, `verbose`, `__debug`) so identical bodies on the same path with vs without those probes are **not** treated as distinct URLs — reduces false positives on public/demo APIs. **Milestone E** adds CI profile, validated jobs, file/Redis queues, worker/enqueue (`docs/MILESTONES.md` §E).
 
 ---
 

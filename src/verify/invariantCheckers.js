@@ -129,6 +129,39 @@ export function checkDeleteStillReadable(execResults) {
 }
 
 /**
+ * Query keys Mythos adds for info-disclosure / pattern probes only.
+ * Two URLs that differ only by these (plus equivalent remaining params) are the
+ * same logical resource for hierarchy / BOLA heuristics — not distinct parents.
+ */
+const PROBE_ONLY_QUERY_KEYS = new Set(['debug', 'trace', 'verbose', '__debug']);
+
+/**
+ * Stable URL string for deduping: pathname + sorted query with probe keys removed.
+ *
+ * @param {string} urlStr
+ */
+export function canonicalUrlForHierarchyCompare(urlStr) {
+  try {
+    const u = new URL(urlStr);
+    /** @type {Array<[string, string]>} */
+    const kept = [];
+    u.searchParams.forEach((value, key) => {
+      if (!PROBE_ONLY_QUERY_KEYS.has(key.toLowerCase())) {
+        kept.push([key, value]);
+      }
+    });
+    kept.sort((a, b) => a[0].localeCompare(b[0]));
+    const out = new URL(u.origin + u.pathname);
+    for (const [k, v] of kept) {
+      out.searchParams.append(k, v);
+    }
+    return out.toString();
+  } catch {
+    return urlStr;
+  }
+}
+
+/**
  * Normalize path: numeric and UUID segments → placeholders for grouping.
  *
  * @param {string} pathname
@@ -214,13 +247,15 @@ export function checkResourceHierarchyCrossParent(execResults) {
       byFp.set(row.fp, g);
     }
     for (const [, group] of byFp) {
-      const urls = [...new Set(group.map((x) => x.url))];
-      if (urls.length < 2) continue;
+      const distinctCanonical = [
+        ...new Set(group.map((x) => canonicalUrlForHierarchyCompare(String(x.url)))),
+      ];
+      if (distinctCanonical.length < 2) continue;
       out.push({
         checkerId: 'resource_hierarchy_cross_parent',
         severity: 'high',
         title: 'Identical GET bodies for different URLs (possible BOLA)',
-        detail: `Same body fingerprint across: ${urls.slice(0, 4).join(' | ')}${urls.length > 4 ? ' …' : ''}`,
+        detail: `Same body fingerprint across: ${distinctCanonical.slice(0, 4).join(' | ')}${distinctCanonical.length > 4 ? ' …' : ''}`,
         evidenceCaseIds: group.map((x) => x.caseId),
         caseId: group[0].caseId,
         url: group[0].url,
