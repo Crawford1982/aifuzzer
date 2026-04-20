@@ -27,7 +27,15 @@ Everything below assumes **tests on authorized targets**, caps on request volume
 
 ## v0.4 — Adaptive feedback (still no Mythos fantasies)
 
-- Novelty scoring using structural diff (keys, arrays length, status buckets).
+**Shipped (Milestone G — see [`docs/MILESTONES.md`](./MILESTONES.md)):**
+
+- [x] Live ID harvest from 2xx responses → merged into IDOR/wordlist seeds before flat expansion (`src/feedback/idHarvest.js`).
+- [x] Flat-case ordering biased by **`rankRoutesFromCampaignMemory`** when **`--campaign-memory`** + prior run data exist; unseen routes preferred over routes already exercised by chains this run (`src/feedback/casePrioritizer.js`).
+- [x] **`semanticSnapshot.observations`** in reports — full `SemanticModel` timeline for debugging runs.
+
+**Still open for v0.4:**
+
+- Novelty scoring using structural diff (keys, arrays length, status buckets) beyond route dedup.
 - Simple bandit / round-robin over hypothesis families that opened new buckets.
 
 ## Milestone C (bounded LLM planner) — **implemented (v1)**

@@ -7,6 +7,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 import { buildSessionSummary, mergeCampaignMemory } from '../campaign/sessionMemory.js';
+import { harvestIdsFromResults } from '../feedback/idHarvest.js';
+import { prioritizeCases } from '../feedback/casePrioritizer.js';
 
 import { probeRestSurface } from '../surface/RestSurfaceProbe.js';
 import { SemanticModel } from '../semantic/SemanticModel.js';
@@ -16,7 +18,7 @@ import { ResponseIndex } from '../feedback/ResponseIndex.js';
 import { triageResults } from '../verify/BasicTriage.js';
 import { attachEvidenceCurls } from '../verify/evidencePack.js';
 import { buildTransportOpts } from '../safety/executorContext.js';
-import { buildBaselineFingerprints } from '../verify/baseline.js';
+import { buildBaselineFingerprints, canonicalRouteKey } from '../verify/baseline.js';
 import { enrichFindingsWithConfidence } from '../verify/confidence.js';
 import { enrichFindingsWithStatistics } from '../verify/statsSignals.js';
 import { minimizationHint } from '../verify/minimize.js';
@@ -243,6 +245,10 @@ export async function runMythosPipeline(cfg) {
     }
 
     const remaining = Math.max(0, cfg.maxRequests - spent);
+
+    // Milestone G: collect results from early execution phases for feedback signals
+    const earlyResults = [...llmResults, ...chainFlatResults];
+
     const { expandFromOpenApi } = await import('../hypothesis/SpecHypothesisEngine.js');
     const aiReserve = cfg.aiMutationHints ? Math.min(8, Math.max(0, Math.floor(remaining / 4))) : 0;
     const flatBudget = Math.max(0, remaining - aiReserve);
@@ -288,6 +294,15 @@ export async function runMythosPipeline(cfg) {
     const capTotal = Math.min(Math.max(1, cfg.maxWordlistInjections ?? 64), 512);
     wordlistLines = [...new Set(wordlistLines)].slice(0, capTotal);
 
+    // Milestone G — live ID harvest: seed IDOR cases with real IDs from early responses
+    if (earlyResults.length) {
+      const harvested = harvestIdsFromResults(earlyResults, { maxIds: 48 });
+      if (harvested.length) {
+        wordlistLines = [...new Set([...wordlistLines, ...harvested])].slice(0, capTotal);
+        model.observe({ kind: 'live_id_harvest', count: harvested.length });
+      }
+    }
+
     /** @type {import('../hypothesis/HypothesisEngine.js').FuzzCase[]} */
     let aiHintCases = [];
     if (cfg.aiMutationHints && aiReserve > 0) {
@@ -318,7 +333,40 @@ export async function runMythosPipeline(cfg) {
       maxWordlistInjections: cfg.maxWordlistInjections ?? 64,
       maxBodyMutationsPerOp: cfg.maxBodyMutationsPerOp ?? 0,
     });
-    const mergedFlat = [...flatCases, ...aiHintCases].slice(0, remaining);
+
+    // Milestone G — case prioritization: rank by campaign memory + route novelty
+    let prioritizedFlat = flatCases;
+    {
+      // Routes ranked high in past campaigns (most errors/findings first)
+      let rankedRouteKeys = /** @type {string[]} */ ([]);
+      if (persistedCampaignMemory) {
+        const { rankRoutesFromCampaignMemory } = await import('../ops/routeMemoryRank.js');
+        rankedRouteKeys = rankRoutesFromCampaignMemory(persistedCampaignMemory, { limit: 100 });
+      }
+
+      // Routes already visited this run (chains + LLM) — prefer unseen routes
+      const seenRouteKeys = new Set(
+        earlyResults
+          .filter((r) => !/** @type {Record<string,unknown>} */ (r).error)
+          .map((r) => {
+            const row = /** @type {Record<string, unknown>} */ (r);
+            return canonicalRouteKey(String(row.method || 'GET'), String(row.url || ''));
+          })
+      );
+
+      prioritizedFlat = prioritizeCases(flatCases, { rankedRouteKeys, seenRouteKeys });
+
+      if (rankedRouteKeys.length || seenRouteKeys.size) {
+        model.observe({
+          kind: 'case_prioritization',
+          rankedRoutes: rankedRouteKeys.length,
+          seenRoutesThisRun: seenRouteKeys.size,
+          flatCaseCount: flatCases.length,
+        });
+      }
+    }
+
+    const mergedFlat = [...prioritizedFlat, ...aiHintCases].slice(0, remaining);
 
     const flatResults = await executeCases(mergedFlat, {
       ...transport,

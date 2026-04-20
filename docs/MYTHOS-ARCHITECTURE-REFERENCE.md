@@ -65,14 +65,14 @@ That means, without you hand-writing endpoints or payloads:
 | Target input | Paste URL | CLI: **`--target`**, optional **`--openapi`**, optional **`--stub-plan`**, `--auth`. |
 | Surface | Rich discovery | **REST slice** + **OpenAPI 3 JSON/YAML** normalization. |
 | Deep / state | Static + live API truth | **Producer→consumer graph** (heuristic) + **sequential chains** with **live `id` binding** (list→item, create→item). **No LLM.** |
-| Semantic graph | Real model | **Stub** (`SemanticModel`): observations only. |
-| Hypotheses | AI + rules | **Deterministic:** pattern mode, spec expansion, stateful campaigns, **typed `ExecutionPlan` + compiler**; **stub planner** only. |
+| Semantic graph | Real model | **`SemanticModel`**: append-only observations; **`semanticSnapshot.observations`** in each JSON report (timeline of pipeline events). Still no role graph yet. |
+| Hypotheses | AI + rules | **Deterministic:** pattern mode, spec expansion, stateful campaigns, **typed `ExecutionPlan` + compiler**; optional **bounded LLM planner** (`--plan-with-llm`). |
 | Orchestrator | Many agents | **One pipeline**; chains run **sequentially**, flat spec cases **pooled**. |
-| Feedback | Learning | **Novelty index** (light). |
-| Verification | Provable | **Heuristic triage** + per-row **`replayCurl`**. |
-| Tests | CI | **`npm test`**: plan schema, OpenAPI load, dependency graph, **mocked `post_to_item` chain** (no network). |
+| Feedback | Learning | **Novelty index** (`ResponseIndex`). **Milestone G**: **live ID harvest** from 2xx bodies → IDOR seeds; **case prioritization** from **`--campaign-memory`** rank + route novelty within the run. |
+| Verification | Provable | **Checker pipeline**, heuristic triage, stats, confidence — per-row **`replayCurl`**. |
+| Tests | CI | **`npm test`** through **Milestone G** (`test:milestone-g`), no network by default; plus **`test:milestone-e`**, auth refs, checker engine. |
 
-**Bottom line:** The **engine and proof plumbing** (spec, graph, bind, validate plan, execute, replay) are in place. **Milestone C** = add a **bounded LLM** that only fills `ExecutionPlan` (plus redaction, retries, and no direct `fetch` in the planner module).
+**Bottom line:** The **engine and proof plumbing** (spec, graph, bind, validate plan, execute, replay, feedback reranking, report observations) are in place. Planned next steps: **`docs/MILESTONES.md`** Milestones **H–L** (checkers, LLM response analyst, `$ref`, richer mutations, two-pass campaigns).
 
 ---
 
@@ -95,4 +95,4 @@ Roughly (see also `docs/ROADMAP.md`):
 
 ---
 
-*Reference map preserved for planning; update this file only when the architecture picture changes.*
+*Reference map preserved for planning; update **Where this repo is now** when shipped layers change (match `docs/MILESTONES.md` / `README.md`).*

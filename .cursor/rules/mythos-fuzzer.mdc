@@ -8,5 +8,6 @@ globs: src/**/*.js
 - **Executor** (`src/execution/`, `HttpFuzzAgent.js`) must stay free of LLM/API SDK imports. It only runs `FuzzCase` objects. **Provider HTTP** for models is only in **`src/planner/llmPlanner.js`**.
 - **Planner output** must be validated with `validatePlan` in `src/planner/planSchema.js`, then compiled with `compilePlanToCases` in `src/planner/planCompiler.js` before execution.
 - **Hypothesis expansion** (`src/hypothesis/`) is deterministic: patterns, OpenAPI-derived cases, or plan-compiled cases — never raw model text.
+- **Feedback (Milestone G)** — `src/feedback/idHarvest.js` and `casePrioritizer.js` are **deterministic** (no LLM): harvest IDs from responses, reorder flat cases by campaign memory + route novelty.
 - **Evidence** for findings: prefer `src/verify/evidencePack.js` (e.g. `replayCurl`) over narrative “exploit” prose.
 - Do not reference external “Mythos framework” as something we ship; use **typed execution plans** and **replay evidence** in user-facing strings.

@@ -12,7 +12,8 @@ This repository is a **framework-shaped** security research tool: the same **lay
 - **Typed plans** — `--stub-plan` compiles a fixed `ExecutionPlan` through the same path as a future LLM planner (validate → `FuzzCase` → execute).
 - **Hypotheses** — pattern mode (no spec) or spec mode; both are deterministic.
 - **Verification (light)** — heuristics + per-row **`replayCurl`** in the report.
-- **Output** — JSON under `./output/` (gitignored). Large `fullBody` capture is used in-memory for binding only, not stored in the report.
+- **Milestone G — feedback loops** — live IDs harvested from 2xx responses seed IDOR cases; **`--campaign-memory`** biases flat-case order toward historically noisy routes; routes already hit by chains this run are deprioritized for coverage. See `src/feedback/idHarvest.js`, `src/feedback/casePrioritizer.js`.
+- **Output** — JSON under `./output/` (gitignored). Large `fullBody` capture is used in-memory for binding only, not stored in the report. **`semanticSnapshot.observations`** is the full timeline of pipeline events (OpenAPI summary, dependency graph, planner skips, Milestone G `live_id_harvest` / `case_prioritization`, etc.).
 
 `cloud-brain-scope-lab/` is a separate UI/scope experiment; the **fuzzer engine** is the `src/` tree + `npm start`.
 
@@ -88,12 +89,13 @@ npm test
 | `npm run test:hierarchy-trivial` | Hierarchy checker skips trivial public list shells (offline). |
 | `npm run test:milestone-e` | CI profile, campaign job validation, file queue + stale recovery, route ranking (offline). |
 | `npm run test:auth-refs` | Auth-by-env resolution for CLI/jobs (offline). |
+| `npm run test:milestone-g` | Feedback loops: live ID harvest, case prioritization, route novelty ordering (offline). |
 | `npm run test:llm-e2e` | Optional real LLM call — set **`MYTHOS_E2E_LLM=1`** + `MYTHOS_LLM_API_KEY`; **not** in `npm test`. |
 | `npm run test:scope-lab-agent` | Optional integration with `cloud-brain-scope-lab` adapter (hits **jsonplaceholder** unless modified). |
 
 Fixtures live under **`fixtures/`** — `minimal-posts.openapi.json` includes **`POST /posts`** (`createPost`) alongside list/get routes for **`post_to_item`** chains.
 
-**Milestone reference:** [`docs/MILESTONES.md`](docs/MILESTONES.md) through **Milestone E** (CI mode, campaign jobs, file or Redis queues, worker/enqueue — same pipeline as CLI).
+**Milestone reference:** [`docs/MILESTONES.md`](docs/MILESTONES.md) through **Milestone G** (feedback loops: live ID harvest, case prioritization by campaign memory + route novelty).
 
 **Milestone E — ops (optional):**
 
@@ -117,12 +119,12 @@ src/
   surface/       # Layer 1 (REST slice)
   openapi/       # Spec load + normalize
   state/         # Dependency edges + JSON handle extract
-  semantic/      # Layer 2 (observations stub)
+  semantic/      # Layer 2 — SemanticModel observations (also in report)
   hypothesis/    # Patterns, OpenAPI expansion, stateful campaigns
   planner/       # Typed execution plans (+ bounded LLM)
   orchestrator/  # Pipeline
   execution/     # HTTP pool + sequential chains
-  feedback/      # Response novelty / indexing
+  feedback/      # Novelty index; Milestone G: idHarvest, casePrioritizer
   verify/        # Triage, checkers, stats, HAR / replay
   campaign/      # Session / campaign memory merge (deterministic)
   ops/           # Milestone E: CI profile, queues, worker, auth-by-env
@@ -130,8 +132,9 @@ data/            # bounty-signals.json, owasp mapping, curated wordlist slice
 docs/
   ARCHITECTURE.md
   ROADMAP.md
-  MILESTONES.md
+  MILESTONES.md          # through Milestone G (shipped); H–L planned — exit criteria only
 ```
+
 
 ## Philosophy
 

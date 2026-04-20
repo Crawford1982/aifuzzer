@@ -2,7 +2,7 @@
 
 Single source of truth for **delivery phases** and **exit criteria**. Implementation details live in code; this file tracks **what “done” means**.
 
-**Tests (regression):** `npm test` — see `package.json` (offline; no API keys). **A–F** on `main` are expected to pass. **F** adds `test:checker-engine`, `test:body-mutations`, `test:wordlist-expand`. **E** adds `test:milestone-e`, **`test:auth-refs`**. Optional live LLM: `MYTHOS_E2E_LLM=1 npm run test:llm-e2e`.
+**Tests (regression):** `npm test` — see `package.json` (offline; no API keys). **A–G** on `main` are expected to pass. **F** adds `test:checker-engine`, `test:body-mutations`, `test:wordlist-expand`. **E** adds `test:milestone-e`, **`test:auth-refs`**. **G** adds **`test:milestone-g`** (feedback loops). Optional live LLM: `MYTHOS_E2E_LLM=1 npm run test:llm-e2e`.
 
 ---
 
@@ -114,6 +114,89 @@ Single source of truth for **delivery phases** and **exit criteria**. Implementa
 - [x] **CI scope gate (optional)** — **`MYTHOS_CI_REQUIRE_SCOPE`** / **`--ci-require-scope`** with **`--ci`**: fails if no **`--scope-file`** (predictable surface; not a substitute for legal authorization).
 
 **Later (E+):** blocking Redis consumer, embedding-backed ranker, hosted object store for full reports.
+
+---
+
+## Milestone G — Close the feedback loops
+
+**Goal:** Connect the three built-but-disconnected signals — campaign memory ranking, response novelty, and live ID harvesting — so every run is smarter than the last.
+
+**Done when:**
+
+- [x] **Live ID harvesting** — after chains + LLM cases execute, extract numeric IDs and UUIDs from 2xx response bodies (`src/feedback/idHarvest.js`); merge harvested IDs into the wordlist seed pool for subsequent flat IDOR cases (`harvestIdsFromResults`). No hardcoded IDs required for targets that leak them naturally.
+- [x] **Case prioritization from campaign memory** — when `--campaign-memory` is loaded, `rankRoutesFromCampaignMemory` output drives the sort order of flat cases so high-signal routes from previous runs are tested first within budget (`src/feedback/casePrioritizer.js`).
+- [x] **Route novelty ordering** — routes already hit by chains / LLM slice this run are deprioritized in the flat expansion; unseen routes are preferred, maximizing coverage within the request budget.
+- [x] **SemanticModel observations** — `live_id_harvest` and `case_prioritization` observation kinds record what was harvested/reordered for the report.
+- [x] **Offline tests** — `npm run test:milestone-g` covers ID extraction from collections/resources/UUIDs, harvest filtering (2xx-only), priority ordering (ranked-first, unseen-first), cap enforcement.
+
+**Artifacts:** `src/feedback/idHarvest.js`, `src/feedback/casePrioritizer.js`; wiring in `src/orchestrator/MythosOrchestrator.js`.
+
+---
+
+## Milestone H — Three new OWASP checkers
+
+**Goal:** Cover the largest gaps in the OWASP API Top 10 (2023) — mass assignment, function-level authz, shadow/inventory endpoints — with deterministic oracles.
+
+**Done when:**
+
+- [ ] **`mass_assignment` checker** — POST/PUT with extra synthetic fields returns 200 and the follow-up GET reflects those fields back in the response body (API3:2023). Requires `--max-body-mutations-per-op > 0`.
+- [ ] **`function_level_authz` checker** — routes tagged `admin`/`internal` or under `/admin/`, `/internal/` paths are replayed without auth or with `--auth-alt`; 200/non-401 response flags possible privilege escalation (API5:2023).
+- [ ] **`shadow_endpoint` checker** — probe version variants (`/v1/`, `/v2/`, `/api/`) and infer legacy paths from existing spec path patterns; unexpected 200 responses flagged (API9:2023).
+- [ ] Checker IDs and OWASP mappings added to `src/verify/checkerRegistry.js`; implementations in `src/verify/invariantCheckers.js`.
+- [ ] `npm run test:milestone-h` covers all three checkers offline.
+
+---
+
+## Milestone I — LLM response analyst
+
+**Goal:** Close the last LLM feedback gap — after execution, the model sees redacted evidence of *interesting* responses and proposes targeted follow-up probes, validated before any new HTTP.
+
+**Done when:**
+
+- [ ] **`src/planner/responseAnalysisAdvisor.js`** — collects top-N most interesting results (5xx, auth-bypass successes, body fingerprint novelty); sends truncated, redacted previews to the LLM; validates suggested probes against spec (same pattern as `aiMutationAdvisor`); capped budget; graceful skip when no key.
+- [ ] **`--response-analysis-hints`** CLI flag — optional, requires `--openapi`; runs after first-pass execution; follow-up cases execute within `remaining` budget.
+- [ ] LLM never sees auth tokens, full URL paths with sensitive params, or full response bodies — only shape/status/preview metadata.
+- [ ] `npm run test:milestone-i` mocks provider; tests hint validation and case generation offline.
+
+---
+
+## Milestone J — Spec fidelity (`$ref` resolution)
+
+**Goal:** Real-world OpenAPI specs (Dynatrace, enterprise APIs) use `$ref` extensively; silently skipping them leaves parameters and body schemas empty.
+
+**Done when:**
+
+- [ ] **Local `$ref` resolution** in `src/openapi/OpenApiLoader.js` — resolve `#/components/schemas/…` and `#/components/parameters/…` refs inline during normalization.
+- [ ] External / cross-file `$ref`s skipped gracefully with an observation log entry (not thrown).
+- [ ] Existing `test:openapi` fixture updated with a `$ref`-using spec; test confirms parameters are resolved.
+- [ ] No changes to `NormalizedOperation` or `NormalizedSpec` types — resolution is transparent to all downstream consumers.
+
+---
+
+## Milestone K — Richer mutation corpus
+
+**Goal:** Go beyond 4 body mutation templates to semantically meaningful variations that hit real validation paths.
+
+**Done when:**
+
+- [ ] `buildSchemaBodyMutationVariants` expanded with: negative integers, zero for required numeric fields, unicode boundary strings (`\u0000`, `\uFFFF`), injection probes (`'`, `"`, `<script>`, `--`), boundary values (`2^31-1`, `0`, `-1`), `null` for required fields.
+- [ ] **String-format-aware mutations** — schema `format: uuid` → try a non-UUID string, `null`, and a path traversal string; `format: date` → try invalid date strings and integers.
+- [ ] Cap still enforced (`--max-body-mutations-per-op`); new variants only expand within the same cap.
+- [ ] `npm run test:body-mutations` extended to cover new variants.
+
+---
+
+## Milestone L — Adaptive two-pass campaign
+
+**Goal:** Within a single `npm start` run, execute a targeted second pass on high-interest routes identified in the first pass — making a single invocation behave like a bounded autonomous campaign.
+
+**Done when:**
+
+- [ ] After first-pass execution, `buildRouteInterestScores` (already in `src/campaign/sessionMemory.js`) identifies routes with elevated error/5xx rate.
+- [ ] Second pass runs additional IDOR + body mutation cases on those routes only, using live-harvested IDs from pass one; total budget still bounded by `--max-requests`.
+- [ ] **`--two-pass`** CLI flag enables this explicitly (off by default; CI mode always single-pass).
+- [ ] Report includes `pass1` and `pass2` result blocks for transparency.
+- [ ] `npm run test:milestone-l` tests the pass split and budget enforcement offline.
 
 ---
 

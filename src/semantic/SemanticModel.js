@@ -31,6 +31,8 @@ export class SemanticModel {
     return {
       observationCount: this.observations.length,
       edgeKeys: [...this.edges.keys()],
+      /** Full timeline (openapi, graphs, planner skips, Milestone G prioritization, etc.). */
+      observations: [...this.observations],
     };
   }
 }

@@ -30,12 +30,12 @@ This is the **target** shape. The code in `src/` names the same layers so you ca
 | Surface reconnaissance | `src/surface/` | REST probes + templated `{id}` URLs |
 | OpenAPI ingestion | `src/openapi/` | JSON/YAML → normalized operations |
 | Stateful inference | `src/state/` | Producer→consumer edges + JSON id extraction |
-| Semantic understanding | `src/semantic/` | Observation log (minimal) |
+| Semantic understanding | `src/semantic/` | **`SemanticModel`**: observation log; full timeline in report as **`semanticSnapshot.observations`** |
 | Hypothesis generation | `src/hypothesis/` | Patterns, OpenAPI cases, small stateful chains |
 | Typed execution plans | `src/planner/` | Schema + compiler + stub planner |
 | Orchestration | `src/orchestrator/` | Single pipeline (chains sequential; flat cases pooled) |
 | Execution | `src/execution/` | Concurrent pool + `SequenceExecutor` for binds |
-| Feedback | `src/feedback/` | Novelty index stub |
+| Feedback | `src/feedback/` | `ResponseIndex` novelty; **Milestone G**: `idHarvest.js` (live IDs from responses), `casePrioritizer.js` (memory rank + route novelty) |
 | Verification | `src/verify/` | Heuristic triage + replay `curl` strings |
 
 ## Interfaces (contracts to preserve)

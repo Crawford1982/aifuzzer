@@ -26,11 +26,12 @@
     "test:hierarchy-trivial": "node scripts/test-hierarchy-trivial.mjs",
     "test:milestone-e": "node scripts/test-milestone-e.mjs",
     "test:auth-refs": "node scripts/test-auth-refs.mjs",
+    "test:milestone-g": "node scripts/test-milestone-g.mjs",
     "mythos:enqueue": "node src/ops/enqueue.js",
     "mythos:worker": "node src/ops/worker.js",
     "test:scoped-chain": "node scripts/test-scoped-chain.mjs",
     "test:llm-e2e": "node scripts/test-llm-e2e.mjs",
-    "test": "npm run test:plan && npm run test:openapi && npm run test:graph && npm run test:chains && npm run test:scoped-chain && npm run test:llm-plan && npm run test:scope-policy && npm run test:milestone-d && npm run test:evidence-export && npm run test:stats-signals && npm run test:ai-advisor && npm run test:checker-engine && npm run test:body-mutations && npm run test:wordlist-expand && npm run test:session-memory && npm run test:namespace-overlap && npm run test:hierarchy-trivial && npm run test:milestone-e && npm run test:auth-refs"
+    "test": "npm run test:plan && npm run test:openapi && npm run test:graph && npm run test:chains && npm run test:scoped-chain && npm run test:llm-plan && npm run test:scope-policy && npm run test:milestone-d && npm run test:evidence-export && npm run test:stats-signals && npm run test:ai-advisor && npm run test:checker-engine && npm run test:body-mutations && npm run test:wordlist-expand && npm run test:session-memory && npm run test:namespace-overlap && npm run test:hierarchy-trivial && npm run test:milestone-e && npm run test:auth-refs && npm run test:milestone-g"
   },
   "engines": {
     "node": ">=18"
