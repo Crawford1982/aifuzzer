@@ -44,6 +44,7 @@ Run individual scripts with **`npm run test:<name>`** (see **`package.json`** `s
 | `test:milestone-e` | CI profile, jobs, file queue, Redis hooks (mostly offline). |
 | `test:auth-refs` | **`resolveAuthFields`** / env auth. |
 | `test:milestone-g` | Live ID harvest + case prioritization (feedback loops). |
+| `test:milestone-h` | Milestone **H** OWASP checkers: **mass_assignment**, **function_level_authz**, **shadow_endpoint** (`scripts/test-milestone-h.mjs`). |
 
 ## Optional / network tests (not in `npm test`)
 
@@ -57,6 +58,7 @@ Run individual scripts with **`npm run test:<name>`** (see **`package.json`** `s
 - **Internal `$ref`**: `test:openapi` (`fixtures/refs-parameters.openapi.yaml`).
 - **`post_to_list_get` chains**: `test:graph`, `test:chains`.
 - **Parent ID harvest + nested parent swap**: `test:parent-id-harvest`, `test:parent-swap`, `test:pipeline-parent-harvest`.
+- **Milestone H**: `test:milestone-h` (mass assignment reflection, privileged path + omit_auth / alt-auth, shadow surfaces).
 - **Triage / keyword gating**: `test:triage`.
 - **Evidence shrink**: `test:evidence-export`; orchestrator passes shrink opts when **`--evidence-pack`**.
 

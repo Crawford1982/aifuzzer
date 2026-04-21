@@ -56,6 +56,30 @@ export const MYTHOS_CHECKERS = [
     bountyTierHint: 'high',
   },
   {
+    checkerId: 'mass_assignment',
+    title: 'Synthetic body field persists and is readable (mass assignment)',
+    precondition:
+      'OPENAPI body fuzz `extra_prop` mutation returned success; a later GET response body still contains __mythosUnexpected (requires body mutations enabled).',
+    owaspMapping: ['API3:2023'],
+    bountyTierHint: 'high',
+  },
+  {
+    checkerId: 'function_level_authz',
+    title: 'Privileged route reachable without auth or via alternate principal',
+    precondition:
+      'Path matches admin/internal-style segments; omit_auth probe returned 2xx with a body, or alternate Authorization reached the same sensitive path with 200.',
+    owaspMapping: ['API5:2023'],
+    bountyTierHint: 'high',
+  },
+  {
+    checkerId: 'shadow_endpoint',
+    title: 'Shadow, legacy-version, or inventory-style path returned JSON',
+    precondition:
+      'GET returned 200 on paths suggesting swagger/actuator/graphql/metrics/debug or legacy/beta/staging version prefixes.',
+    owaspMapping: ['API9:2023'],
+    bountyTierHint: 'medium',
+  },
+  {
     checkerId: 'namespace_cross_principal_overlap',
     title: 'Same resource body for primary vs alternate Authorization',
     precondition:

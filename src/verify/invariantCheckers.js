@@ -379,6 +379,190 @@ function finalizeHierarchyCrossParent(buckets, checkerId, title) {
 /**
  * @param {unknown[]} execResults
  */
+/** Milestone H — sensitive path segments (function-level authz). */
+const SENSITIVE_ROUTE_SEG =
+  /(\/|^)(admin|internal|private|mgmt|management|moderator|sudo|superuser|root-users|configuration\/admin)(\/|$)/i;
+
+const VERSION_SKEW_PATH = /\/(v0|beta|alpha|legacy|deprecated|staging-api|internal-api)(\/|$)/i;
+
+/**
+ * @param {string} path
+ * @returns {'inventory_or_docs_surface' | 'legacy_or_alt_version_path' | null}
+ */
+function classifyShadowPath(path) {
+  if (
+    /\/(swagger|api-docs|openapi\.json|graphql|graphiql|playground|actuator)(\/|$)/i.test(path) ||
+    /\/health\/details(\/|$)/i.test(path) ||
+    /\/\.env(\/|$)/i.test(path) ||
+    /\/(metrics|prometheus)(\/|$)/i.test(path) ||
+    /\/(debug|trace)(\/|$)/i.test(path)
+  ) {
+    return 'inventory_or_docs_surface';
+  }
+  if (VERSION_SKEW_PATH.test(path)) return 'legacy_or_alt_version_path';
+  return null;
+}
+
+const MASS_ASSIGN_MARKER = '__mythosUnexpected';
+
+/**
+ * POST/PUT/PATCH **extra_prop** body fuzz (synthetic field) returned 2xx; later GET reflects the marker in JSON.
+ * API3:2023 — bounded window search (requires body mutations enabled in the run).
+ *
+ * @param {unknown[]} execResults
+ */
+export function checkMassAssignmentReflection(execResults) {
+  /** @type {Array<Record<string, unknown>>} */
+  const out = [];
+
+  for (let i = 0; i < execResults.length; i++) {
+    const a = row(execResults[i]);
+    const cid = String(a.caseId || '');
+    if (!cid.includes(':bodyfuzz:extra_prop')) continue;
+    const m = String(a.method || '').toUpperCase();
+    if (!['POST', 'PUT', 'PATCH'].includes(m)) continue;
+    const st = a.status != null ? Number(a.status) : null;
+    if (st == null || st < 200 || st >= 300) continue;
+
+    const windowEnd = Math.min(execResults.length, i + 96);
+    for (let j = i + 1; j < windowEnd; j++) {
+      const b = row(execResults[j]);
+      if (String(b.method || '').toUpperCase() !== 'GET') continue;
+      if (Number(b.status) !== 200) continue;
+      const prev = String(b.bodyPreview || '');
+      if (!prev.includes(MASS_ASSIGN_MARKER)) continue;
+
+      out.push({
+        checkerId: 'mass_assignment',
+        severity: 'high',
+        title: 'Mass assignment: synthetic field reflected after mutating request',
+        detail:
+          `Body fuzz case ${cid} returned ${st}; a subsequent GET response includes "${MASS_ASSIGN_MARKER}" — verify unwanted property binding.`,
+        evidenceCaseIds: [a.caseId, b.caseId],
+        caseId: a.caseId,
+        url: b.url,
+      });
+      break;
+    }
+  }
+
+  return out;
+}
+
+/**
+ * Sensitive routes returned success without auth (omit_auth) or with alternate principal (authAlt).
+ * API5:2023 — heuristic path probe.
+ *
+ * @param {unknown[]} execResults
+ */
+export function checkFunctionLevelAuthWeakness(execResults) {
+  /** @type {Array<Record<string, unknown>>} */
+  const out = [];
+
+  for (const raw of execResults) {
+    const r = row(raw);
+    const fam = String(r.family || '');
+    const cid = String(r.caseId || '');
+    const path = pathnameOnly(String(r.url || ''));
+    if (!path || !SENSITIVE_ROUTE_SEG.test(path)) continue;
+
+    const st = r.status != null ? Number(r.status) : null;
+    if (st == null || st < 200 || st >= 300) continue;
+
+    const bodyLen = String(r.bodyPreview || '').length;
+    if (bodyLen < 32) continue;
+
+    if (fam === 'AUTH_BYPASS' && cid.includes('omit_auth')) {
+      out.push({
+        checkerId: 'function_level_authz',
+        severity: 'high',
+        title: 'Sensitive path reachable without Authorization (omit_auth probe)',
+        detail: `${String(r.method || 'GET')} ${path} returned ${st} with body (${bodyLen} chars) — verify role checks on privileged routes.`,
+        evidenceCaseIds: [r.caseId],
+        caseId: r.caseId,
+        url: r.url,
+      });
+      continue;
+    }
+
+    if (fam === 'NAMESPACE_AUTH_REPLAY' && cid.endsWith(':authAlt')) {
+      out.push({
+        checkerId: 'function_level_authz',
+        severity: 'medium',
+        title: 'Sensitive path returned 200 under alternate principal',
+        detail: `Alternate Authorization reached ${path} (${st}) — verify intended cross-principal access for admin/internal surfaces.`,
+        evidenceCaseIds: [r.caseId],
+        caseId: r.caseId,
+        url: r.url,
+      });
+    }
+  }
+
+  return dedupeCheckerRows(out, 'function_level_authz');
+}
+
+/**
+ * Shadow / inventory / legacy-version URLs that returned 200 with non-trivial JSON-like bodies.
+ * API9:2023 — exposure of undocumented or auxiliary surfaces.
+ *
+ * @param {unknown[]} execResults
+ */
+export function checkShadowEndpointExposure(execResults) {
+  /** @type {Array<Record<string, unknown>>} */
+  const out = [];
+
+  for (const raw of execResults) {
+    const r = row(raw);
+    if (String(r.method || '').toUpperCase() !== 'GET') continue;
+    if (Number(r.status) !== 200) continue;
+
+    const path = pathnameOnly(String(r.url || ''));
+    if (!path) continue;
+
+    const prev = String(r.bodyPreview || '').trim();
+    if (prev.length < 24) continue;
+
+    const looksJson = prev.startsWith('{') || prev.startsWith('[');
+    if (!looksJson) continue;
+
+    const kind = classifyShadowPath(path);
+    if (!kind) continue;
+
+    out.push({
+      checkerId: 'shadow_endpoint',
+      severity: kind === 'inventory_or_docs_surface' ? 'medium' : 'low',
+      title:
+        kind === 'inventory_or_docs_surface'
+          ? 'Possible shadow or management endpoint exposed'
+          : 'Possible legacy or alternate API version path exposed',
+      detail: `GET ${path} returned 200 with JSON-like body (${prev.length} chars) — confirm inventory / versioning posture.`,
+      evidenceCaseIds: [r.caseId],
+      caseId: r.caseId,
+      url: r.url,
+    });
+  }
+
+  return dedupeCheckerRows(out, 'shadow_endpoint');
+}
+
+/**
+ * @param {Array<Record<string, unknown>>} rows
+ * @param {string} checkerId
+ */
+function dedupeCheckerRows(rows, checkerId) {
+  const seen = new Set();
+  /** @type {typeof rows} */
+  const out = [];
+  for (const row of rows) {
+    if (String(row.checkerId) !== checkerId) continue;
+    const k = `${row.caseId}|${row.url}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(row);
+  }
+  return out;
+}
+
 export function runInvariantCheckers(execResults) {
   return [
     ...checkLeakAfterFailedCreate(execResults),
@@ -387,6 +571,9 @@ export function runInvariantCheckers(execResults) {
     ...checkResourceHierarchyCrossParent(execResults),
     ...checkNestedResourceHierarchyCrossParent(execResults),
     ...checkNamespacePrincipalOverlap(execResults),
+    ...checkMassAssignmentReflection(execResults),
+    ...checkFunctionLevelAuthWeakness(execResults),
+    ...checkShadowEndpointExposure(execResults),
   ];
 }
 

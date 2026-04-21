@@ -175,6 +175,6 @@ assert.equal(
 
 const fired = runCheckerPipeline(leakRows, { evidenceHarPath: '/tmp/x.har' });
 assert.ok(fired.some((x) => x.kind === 'checker'));
-assert.ok(MYTHOS_CHECKERS.length >= 6);
+assert.ok(MYTHOS_CHECKERS.length >= 9);
 
 console.log('checker engine ok');

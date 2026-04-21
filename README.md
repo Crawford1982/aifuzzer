@@ -11,7 +11,7 @@ This repository is a **framework-shaped** security research tool: the same **lay
 - **Stateful chains (Milestone B)** — heuristics find `list → item` (and `create → item` when POST exists on the collection); the engine runs **sequential** steps and binds a real `id` from the first response into the second request. No LLM.
 - **Typed plans** — `--stub-plan` compiles a fixed `ExecutionPlan` through the same path as a future LLM planner (validate → `FuzzCase` → execute).
 - **Hypotheses** — pattern mode (no spec) or spec mode; both are deterministic.
-- **Verification (light)** — heuristics + per-row **`replayCurl`** in the report.
+- **Verification (light)** — heuristics + invariant checkers (including **Milestone H**: mass assignment reflection, privileged-route auth probes, shadow/inventory paths) + per-row **`replayCurl`** in the report.
 - **Milestone G — feedback loops** — live IDs harvested from 2xx responses seed IDOR cases; **collection-list harvest** (`src/feedback/parentIdHarvest.js`) feeds **nested parent-swap** expansion when early runs include JSON array list responses; **`--campaign-memory`** biases flat-case order toward historically noisy routes; routes already hit by chains this run are deprioritized for coverage. See `src/feedback/idHarvest.js`, `src/feedback/parentIdHarvest.js`, `src/feedback/casePrioritizer.js`.
 - **Output** — JSON under `./output/` (gitignored). Large `fullBody` capture is used in-memory for binding only, not stored in the report. **`semanticSnapshot.observations`** is the full timeline of pipeline events (OpenAPI summary, dependency graph, planner skips, Milestone G `live_id_harvest` / `case_prioritization`, etc.).
 
@@ -97,6 +97,7 @@ Full catalog, CI notes, and feature ↔ test mapping: **`docs/TESTING.md`**.
 | `npm run test:milestone-e` | CI profile, campaign job validation, file queue + stale recovery, route ranking (offline). |
 | `npm run test:auth-refs` | Auth-by-env resolution for CLI/jobs (offline). |
 | `npm run test:milestone-g` | Feedback loops: live ID harvest, case prioritization, route novelty ordering (offline). |
+| `npm run test:milestone-h` | Milestone **H** OWASP checkers (mass assignment, authz paths, shadow endpoints); `scripts/test-milestone-h.mjs`. |
 | `npm run test:llm-e2e` | Optional real LLM call — set **`MYTHOS_E2E_LLM=1`** + `MYTHOS_LLM_API_KEY`; **not** in `npm test`. |
 | `npm run test:scope-lab-agent` | Optional integration with `cloud-brain-scope-lab` adapter (hits **jsonplaceholder** unless modified). |
 

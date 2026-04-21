@@ -140,11 +140,11 @@ Single source of truth for **delivery phases** and **exit criteria**. Implementa
 
 **Done when:**
 
-- [ ] **`mass_assignment` checker** — POST/PUT with extra synthetic fields returns 200 and the follow-up GET reflects those fields back in the response body (API3:2023). Requires `--max-body-mutations-per-op > 0`.
-- [ ] **`function_level_authz` checker** — routes tagged `admin`/`internal` or under `/admin/`, `/internal/` paths are replayed without auth or with `--auth-alt`; 200/non-401 response flags possible privilege escalation (API5:2023).
-- [ ] **`shadow_endpoint` checker** — probe version variants (`/v1/`, `/v2/`, `/api/`) and infer legacy paths from existing spec path patterns; unexpected 200 responses flagged (API9:2023).
-- [ ] Checker IDs and OWASP mappings added to `src/verify/checkerRegistry.js`; implementations in `src/verify/invariantCheckers.js`.
-- [ ] `npm run test:milestone-h` covers all three checkers offline.
+- [x] **`mass_assignment` checker** — `bodyfuzz:extra_prop` case returns 2xx; a later GET (same run) has `__mythosUnexpected` in the body preview (API3:2023). In live runs, requires **`--max-body-mutations-per-op > 0`** so `extra_prop` cases are generated.
+- [x] **`function_level_authz` checker** — path heuristics for **admin / internal / private / …** — flags **`AUTH_BYPASS` + `omit_auth`** on those paths with 2xx and a non-trivial body, and **`NAMESPACE_AUTH_REPLAY` + `:authAlt`** on the same (API5:2023).
+- [x] **`shadow_endpoint` checker** — GET 200 on paths suggesting **swagger/actuator/graphql/metrics/debug/trace** etc., or **legacy/beta/internal-api** style segments, with JSON-like bodies (API9:2023).
+- [x] Checker IDs and OWASP mappings in `src/verify/checkerRegistry.js`; implementations in `src/verify/invariantCheckers.js`.
+- [x] **`npm run test:milestone-h`** covers all three checkers offline (`scripts/test-milestone-h.mjs`).
 
 ---
 

@@ -24,7 +24,7 @@ Prefer **“typed plan” / “execution plan”** over vendor framework names. 
 
 ## Tests
 
-- **`npm test`** — includes plan/openapi/graph/chains (incl. **`post_to_list_get`**), verifier/checkers (`test:milestone-d`, `test:checker-engine` with flat + nested hierarchy), **`test:parent-swap`**, **`test:parent-id-harvest`**, **`test:pipeline-parent-harvest`** (harvest → expand integration), campaign memory / namespace overlap / hierarchy guards, **`test:milestone-e`** (CI + queues), **`test:auth-refs`**, **`test:milestone-g`** (feedback: ID harvest + case prioritization) — see **`package.json`** and **`docs/TESTING.md`** (default **no outbound HTTP**).
+- **`npm test`** — includes plan/openapi/graph/chains (incl. **`post_to_list_get`**), verifier/checkers (`test:milestone-d`, `test:checker-engine` with flat + nested hierarchy), **`test:parent-swap`**, **`test:parent-id-harvest`**, **`test:pipeline-parent-harvest`** (harvest → expand integration), **`test:milestone-h`** (mass_assignment, function_level_authz, shadow_endpoint), campaign memory / namespace overlap / hierarchy guards, **`test:milestone-e`** (CI + queues), **`test:auth-refs`**, **`test:milestone-g`** (feedback: ID harvest + case prioritization) — see **`package.json`** and **`docs/TESTING.md`** (default **no outbound HTTP**).
 - **`npm run validation:golden`** — wrapper around **`npm test`**; CI runs **`npm test`** then **`validation:golden`** on **`main`**.
 - When adding planner or compiler logic, extend **`scripts/verify-plan.mjs`** or add a focused script under **`scripts/`**, then document it in **`docs/TESTING.md`**.
 
