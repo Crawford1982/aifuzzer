@@ -124,12 +124,13 @@ Single source of truth for **delivery phases** and **exit criteria**. Implementa
 **Done when:**
 
 - [x] **Live ID harvesting** — after chains + LLM cases execute, extract numeric IDs and UUIDs from 2xx response bodies (`src/feedback/idHarvest.js`); merge harvested IDs into the wordlist seed pool for subsequent flat IDOR cases (`harvestIdsFromResults`). No hardcoded IDs required for targets that leak them naturally.
+- [x] **Collection-scoped parent harvest** — from early GETs whose pathname has no embedded id/uuid segments and whose body is a JSON array, bucket IDs by collection path (`src/feedback/parentIdHarvest.js`); merged into **`liveParentIdsByCollection`** for nested **`OPENAPI_PARENT_SWAP`** cases (`semanticSnapshot.observations` includes **`parent_id_harvest`** when buckets exist). Offline: **`npm run test:parent-id-harvest`**, **`npm run test:pipeline-parent-harvest`**.
 - [x] **Case prioritization from campaign memory** — when `--campaign-memory` is loaded, `rankRoutesFromCampaignMemory` output drives the sort order of flat cases so high-signal routes from previous runs are tested first within budget (`src/feedback/casePrioritizer.js`).
 - [x] **Route novelty ordering** — routes already hit by chains / LLM slice this run are deprioritized in the flat expansion; unseen routes are preferred, maximizing coverage within the request budget.
 - [x] **SemanticModel observations** — `live_id_harvest` and `case_prioritization` observation kinds record what was harvested/reordered for the report.
 - [x] **Offline tests** — `npm run test:milestone-g` covers ID extraction from collections/resources/UUIDs, harvest filtering (2xx-only), priority ordering (ranked-first, unseen-first), cap enforcement.
 
-**Artifacts:** `src/feedback/idHarvest.js`, `src/feedback/casePrioritizer.js`; wiring in `src/orchestrator/MythosOrchestrator.js`.
+**Artifacts:** `src/feedback/idHarvest.js`, `src/feedback/parentIdHarvest.js`, `src/feedback/casePrioritizer.js`; wiring in `src/orchestrator/MythosOrchestrator.js`. Regression catalog: **`docs/TESTING.md`**.
 
 ---
 

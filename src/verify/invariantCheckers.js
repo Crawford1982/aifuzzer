@@ -129,6 +129,65 @@ export function checkDeleteStillReadable(execResults) {
 }
 
 /**
+ * GET collection path returns 5xx while sibling `…/all` list returns 200 — routing mismatch signal
+ * (common when a bare list route is broken but an alternate list endpoint works).
+ *
+ * @param {unknown[]} execResults
+ */
+export function checkBrokenCollectionListSibling(execResults) {
+  /** @type {Map<string, { bare?: Record<string, unknown>, suff?: Record<string, unknown> }>} */
+  const buckets = new Map();
+
+  for (const r of execResults) {
+    const o = row(r);
+    if (String(o.method || '').toUpperCase() !== 'GET') continue;
+    const p = pathnameOnly(String(o.url || ''));
+    if (!p) continue;
+    const key = collectionListBareKey(p);
+    const slot = buckets.get(key) || {};
+    if (/\/all$/i.test(p)) slot.suff = o;
+    else slot.bare = o;
+    buckets.set(key, slot);
+  }
+
+  /** @type {Array<Record<string, unknown>>} */
+  const out = [];
+
+  for (const [, slot] of buckets) {
+    if (!slot.bare || !slot.suff) continue;
+    const sb = slot.bare.status != null ? Number(slot.bare.status) : null;
+    const ss = slot.suff.status != null ? Number(slot.suff.status) : null;
+    if (sb != null && sb >= 500 && ss === 200) {
+      const pb = pathnameOnly(String(slot.bare.url || ''));
+      const ps = pathnameOnly(String(slot.suff.url || ''));
+      out.push({
+        checkerId: 'broken_collection_list_path',
+        severity: 'low',
+        title: 'Sibling list paths disagree (server error vs OK)',
+        detail: `GET ${pb} returned ${sb} while GET ${ps} returned 200 — confirm which route is the supported list endpoint.`,
+        evidenceCaseIds: [slot.bare.caseId, slot.suff.caseId],
+        caseId: slot.bare.caseId,
+        url: slot.suff.url,
+      });
+    }
+  }
+
+  return out;
+}
+
+/**
+ * @param {string} pathname
+ */
+function collectionListBareKey(pathname) {
+  const p = pathname.replace(/\/+$/, '') || '/';
+  if (/\/all$/i.test(p)) {
+    const stripped = p.replace(/\/all$/i, '').replace(/\/+$/, '') || '/';
+    return stripped.toLowerCase();
+  }
+  return p.toLowerCase();
+}
+
+/**
  * Query keys Mythos adds for info-disclosure / pattern probes only.
  * Two URLs that differ only by these (plus equivalent remaining params) are the
  * same logical resource for hierarchy / BOLA heuristics — not distinct parents.
@@ -173,6 +232,18 @@ export function normalizedPathTemplate(pathname) {
 }
 
 /**
+ * Count dynamic `{id}` / `{uuid}` slots after path normalization — used for nested vs flat hierarchy splits.
+ *
+ * @param {string} pathnameOnly
+ */
+export function dynamicSegmentCount(pathnameOnly) {
+  const tmpl = normalizedPathTemplate(pathnameOnly);
+  const ids = tmpl.match(/\{id\}/g)?.length ?? 0;
+  const uuids = tmpl.match(/\{uuid\}/g)?.length ?? 0;
+  return ids + uuids;
+}
+
+/**
  * Skip hierarchy checker on empty shells / identical public list plumbing (reduces FP on read-only APIs).
  *
  * @param {string} text
@@ -206,11 +277,12 @@ export function isTrivialPublicPayload(text) {
 }
 
 /**
- * Same normalized GET template, different concrete paths, both 200, identical body fingerprint.
+ * Shared hierarchy fingerprint bucket build (flat vs nested filters).
  *
  * @param {unknown[]} execResults
+ * @param {(dynamicCount: number) => boolean} dynamicFilter
  */
-export function checkResourceHierarchyCrossParent(execResults) {
+function collectHierarchyCrossParent(execResults, dynamicFilter) {
   /** @type {Map<string, { fp: string, url: string, caseId: unknown }[]>} */
   const buckets = new Map();
 
@@ -222,6 +294,7 @@ export function checkResourceHierarchyCrossParent(execResults) {
     const p = pathnameOnly(String(o.url || ''));
     if (!p) continue;
     const tmpl = normalizedPathTemplate(p);
+    if (!dynamicFilter(dynamicSegmentCount(p))) continue;
     const key = `GET:${tmpl}`;
     const prev = String(o.bodyPreview || '');
     if (prev.length < 64) continue;
@@ -234,6 +307,42 @@ export function checkResourceHierarchyCrossParent(execResults) {
     buckets.set(key, list);
   }
 
+  return buckets;
+}
+
+/**
+ * Same normalized GET template, different concrete paths, both 200, identical body fingerprint.
+ * **Flat routes only** (exactly one dynamic `{id}` or `{uuid}` segment) — list/collection reads.
+ *
+ * @param {unknown[]} execResults
+ */
+export function checkResourceHierarchyCrossParent(execResults) {
+  return finalizeHierarchyCrossParent(
+    collectHierarchyCrossParent(execResults, (n) => n === 1),
+    'resource_hierarchy_cross_parent',
+    'Identical GET bodies for different URLs (possible BOLA)',
+  );
+}
+
+/**
+ * Nested resource routes (two or more dynamic segments) — stronger cross-parent / BOLA-traversal signal.
+ *
+ * @param {unknown[]} execResults
+ */
+export function checkNestedResourceHierarchyCrossParent(execResults) {
+  return finalizeHierarchyCrossParent(
+    collectHierarchyCrossParent(execResults, (n) => n >= 2),
+    'nested_resource_hierarchy_cross_parent',
+    'Nested route: identical GET bodies across different parent paths (possible BOLA / broken scoping)',
+  );
+}
+
+/**
+ * @param {Map<string, { fp: string, url: string, caseId: unknown }[]>} buckets
+ * @param {string} checkerId
+ * @param {string} title
+ */
+function finalizeHierarchyCrossParent(buckets, checkerId, title) {
   /** @type {Array<Record<string, unknown>>} */
   const out = [];
 
@@ -252,9 +361,9 @@ export function checkResourceHierarchyCrossParent(execResults) {
       ];
       if (distinctCanonical.length < 2) continue;
       out.push({
-        checkerId: 'resource_hierarchy_cross_parent',
+        checkerId,
         severity: 'high',
-        title: 'Identical GET bodies for different URLs (possible BOLA)',
+        title,
         detail: `Same body fingerprint across: ${distinctCanonical.slice(0, 4).join(' | ')}${distinctCanonical.length > 4 ? ' …' : ''}`,
         evidenceCaseIds: group.map((x) => x.caseId),
         caseId: group[0].caseId,
@@ -274,7 +383,9 @@ export function runInvariantCheckers(execResults) {
   return [
     ...checkLeakAfterFailedCreate(execResults),
     ...checkDeleteStillReadable(execResults),
+    ...checkBrokenCollectionListSibling(execResults),
     ...checkResourceHierarchyCrossParent(execResults),
+    ...checkNestedResourceHierarchyCrossParent(execResults),
     ...checkNamespacePrincipalOverlap(execResults),
   ];
 }

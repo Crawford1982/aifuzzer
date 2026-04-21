@@ -1,0 +1,24 @@
+openapi: 3.0.3
+info:
+  title: DVGA GraphQL HTTP binding
+  version: "1"
+servers:
+  - url: http://127.0.0.1:5013
+paths:
+  /graphql:
+    post:
+      operationId: graphqlHttpPost
+      summary: GraphQL over HTTP POST (minimal surface for Mythos OpenAPI expansion)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                query:
+                  type: string
+                operationName:
+                  type: string
+                variables:
+                  type: object

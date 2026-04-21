@@ -25,3 +25,6 @@ jobs:
 
       - name: Run regression suite
         run: npm test
+
+      - name: Validation golden (offline anchors)
+        run: npm run validation:golden

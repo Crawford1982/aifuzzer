@@ -12,7 +12,7 @@ This repository is a **framework-shaped** security research tool: the same **lay
 - **Typed plans** — `--stub-plan` compiles a fixed `ExecutionPlan` through the same path as a future LLM planner (validate → `FuzzCase` → execute).
 - **Hypotheses** — pattern mode (no spec) or spec mode; both are deterministic.
 - **Verification (light)** — heuristics + per-row **`replayCurl`** in the report.
-- **Milestone G — feedback loops** — live IDs harvested from 2xx responses seed IDOR cases; **`--campaign-memory`** biases flat-case order toward historically noisy routes; routes already hit by chains this run are deprioritized for coverage. See `src/feedback/idHarvest.js`, `src/feedback/casePrioritizer.js`.
+- **Milestone G — feedback loops** — live IDs harvested from 2xx responses seed IDOR cases; **collection-list harvest** (`src/feedback/parentIdHarvest.js`) feeds **nested parent-swap** expansion when early runs include JSON array list responses; **`--campaign-memory`** biases flat-case order toward historically noisy routes; routes already hit by chains this run are deprioritized for coverage. See `src/feedback/idHarvest.js`, `src/feedback/parentIdHarvest.js`, `src/feedback/casePrioritizer.js`.
 - **Output** — JSON under `./output/` (gitignored). Large `fullBody` capture is used in-memory for binding only, not stored in the report. **`semanticSnapshot.observations`** is the full timeline of pipeline events (OpenAPI summary, dependency graph, planner skips, Milestone G `live_id_harvest` / `case_prioritization`, etc.).
 
 `cloud-brain-scope-lab/` is a separate UI/scope experiment; the **fuzzer engine** is the `src/` tree + `npm start`.
@@ -67,9 +67,13 @@ npm test
 
 ## Testing
 
+Full catalog, CI notes, and feature ↔ test mapping: **`docs/TESTING.md`**.
+
 | Script | What it checks |
 |--------|------------------|
 | `npm test` | Full suite below (CI-friendly, default **no outbound HTTP**). |
+| `npm run validation:golden` | Same as **`npm test`** + success banner — use before shipping REST/triage changes (also run in **GitHub Actions** after `npm test`). |
+| `npm run test:triage` | REST **`BasicTriage`** / **`triageHints`** (keyword + HTML 5xx classification). |
 | `npm run test:plan` | Stub `ExecutionPlan` validates and compiles to `FuzzCase`s. |
 | `npm run test:openapi` | Fixture **JSON + YAML** loads and normalizes. |
 | `npm run test:graph` | `fixtures/minimal-posts.openapi.json` yields **list→item** and **POST→item** edges. |
@@ -84,6 +88,9 @@ npm test
 | `npm run test:checker-engine` | Invariant checkers (leakage, delete, hierarchy) + pipeline (offline). |
 | `npm run test:body-mutations` | Schema body mutation generator (offline). |
 | `npm run test:wordlist-expand` | OpenAPI + `fixtures/sample-wordlist.txt` path injection (offline). |
+| `npm run test:parent-swap` | Nested **`OPENAPI_PARENT_SWAP`** (schema alts + optional **`liveParentIdsByCollection`**) (offline). |
+| `npm run test:parent-id-harvest` | Collection-scoped parent ID harvest from list GET bodies (offline). |
+| `npm run test:pipeline-parent-harvest` | End-to-end harvest → **`expandFromOpenApi`** integration (offline). |
 | `npm run test:session-memory` | Campaign memory merge + session summary (offline). |
 | `npm run test:namespace-overlap` | Namespace / alt-auth overlap checker (offline). |
 | `npm run test:hierarchy-trivial` | Hierarchy checker skips trivial public list shells (offline). |
@@ -93,7 +100,7 @@ npm test
 | `npm run test:llm-e2e` | Optional real LLM call — set **`MYTHOS_E2E_LLM=1`** + `MYTHOS_LLM_API_KEY`; **not** in `npm test`. |
 | `npm run test:scope-lab-agent` | Optional integration with `cloud-brain-scope-lab` adapter (hits **jsonplaceholder** unless modified). |
 
-Fixtures live under **`fixtures/`** — `minimal-posts.openapi.json` includes **`POST /posts`** (`createPost`) alongside list/get routes for **`post_to_item`** chains.
+Fixtures live under **`fixtures/`** — `minimal-posts.openapi.json` includes **`POST /posts`** (`createPost`) alongside list/get routes for **`post_to_item`** chains. Lab-oriented stubs: **`juiceshop-minimal.openapi.yaml`**, **`crapi-minimal.openapi.yaml`**, **`dvga-graphql.openapi.yaml`** (see **`docs/VALIDATION-BENCHMARKS.md`**).
 
 **Milestone reference:** [`docs/MILESTONES.md`](docs/MILESTONES.md) through **Milestone G** (feedback loops: live ID harvest, case prioritization by campaign memory + route novelty).
 
@@ -112,6 +119,17 @@ Fixtures live under **`fixtures/`** — `minimal-posts.openapi.json` includes **
 **LLM planning (live API):** set `MYTHOS_LLM_API_KEY`, then e.g.  
 `npm start -- --target "https://jsonplaceholder.typicode.com" --openapi ./fixtures/minimal-posts.openapi.json --plan-with-llm`
 
+## Lab validation & benchmark logging
+
+Use intentionally vulnerable apps (DVGA, crAPI, Juice Shop) or safe demos (**jsonplaceholder**) to validate **pipeline modes** and report shape—not every lab will produce **`findings`** with the current REST-oriented heuristics (e.g. **DVGA is GraphQL-heavy**; zero heuristic hits is often expected until GraphQL oracles exist).
+
+**Scripts:**
+
+- **`npm run validation:new -- --target dvga --label baseline`** — new folder under `data/validation-feedback/<run-id>/` with `run.md` + `findings.csv` templates.
+- **`npm run validation:log`** — append one row to **`data/validation-feedback/SESSION-LOG.md`** from the latest `output/mythos-report-*.json` (or pass a specific report path after `--`).
+
+Playbooks: **`data/validation-feedback/target-playbooks/`**. Expectations and dummy targets: **`docs/VALIDATION-BENCHMARKS.md`**. **Triage workflow (replay, TP/FP/FN):** **`docs/VALIDATION-TRIAGE.md`**. **REST roadmap (non-GraphQL):** **`docs/REST-LEVEL-UP-PLAN.md`**.
+
 ## Repo layout
 
 ```
@@ -129,10 +147,14 @@ src/
   campaign/      # Session / campaign memory merge (deterministic)
   ops/           # Milestone E: CI profile, queues, worker, auth-by-env
 data/            # bounty-signals.json, owasp mapping, curated wordlist slice
+                 # validation-feedback/ — SESSION-LOG, lab playbooks, per-run CSV + run.md
 docs/
   ARCHITECTURE.md
   ROADMAP.md
   MILESTONES.md          # through Milestone G (shipped); H–L planned — exit criteria only
+  VALIDATION-BENCHMARKS.md  # lab logging, expected findings vs offline tests
+  VALIDATION-TRIAGE.md      # replay-based TP/FP/FN — confirming findings without new features
+  REST-LEVEL-UP-PLAN.md     # REST/OpenAPI/auth depth — phased roadmap
 ```
 
 

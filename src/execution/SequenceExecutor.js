@@ -15,6 +15,7 @@ import { buildOperationUrl } from '../hypothesis/StatefulCampaignEngine.js';
  *   kind:
  *     | 'list_to_item'
  *     | 'post_to_item'
+ *     | 'post_to_list_get'
  *     | 'list_to_scoped_subresource'
  *     | 'post_to_scoped_subresource'
  *     | 'item_to_scoped_subresource',
@@ -26,7 +27,7 @@ import { buildOperationUrl } from '../hypothesis/StatefulCampaignEngine.js';
  *     method: string,
  *     buildUrl: (ctx: Record<string, string>) => string,
  *     omitAuth?: boolean,
- *     extract?: 'array_first_id' | 'object_id',
+ *     extract?: 'array_first_id' | 'object_id' | 'none',
  *     family: string,
  *   }>,
  * }} CompiledStatefulChain
@@ -47,16 +48,19 @@ export function compileStatefulChain(chain, byId, baseUrl) {
   /** @type {CompiledStatefulChain['steps']} */
   const steps = [];
 
+  const producerExtract =
+    edge.kind === 'post_to_list_get'
+      ? 'none'
+      : edge.kind === 'list_to_item' || edge.kind === 'list_to_scoped_subresource'
+        ? 'array_first_id'
+        : 'object_id';
+
   steps.push({
     caseId: `${chain.id}:producer`,
     method: prod.method,
     buildUrl: () => buildOperationUrl(baseUrl, prod, defaultPathValues(prod)),
     omitAuth: false,
-    extract:
-      edge.kind === 'list_to_item' ||
-      edge.kind === 'list_to_scoped_subresource'
-        ? 'array_first_id'
-        : 'object_id',
+    extract: producerExtract,
     family: 'CHAIN_PRODUCER',
   });
 
@@ -64,6 +68,9 @@ export function compileStatefulChain(chain, byId, baseUrl) {
     caseId: `${chain.id}:consumer`,
     method: cons.method,
     buildUrl: (ctx) => {
+      if (edge.kind === 'post_to_list_get') {
+        return buildOperationUrl(baseUrl, cons, defaultPathValues(cons));
+      }
       const pid = ctx[edge.viaParam];
       if (!pid) throw new Error(`Missing bind ${edge.viaParam} for consumer`);
       const pv = { ...defaultPathValues(cons), [edge.viaParam]: pid };
@@ -103,12 +110,13 @@ export async function executeStatefulChain(compiled, opts) {
 
   const prodStep = compiled.steps[0];
   const consStep = compiled.steps[1];
+  const postToList = compiled.kind === 'post_to_list_get';
 
   const case1 = operationToFuzzCase(compiled.producerOp, prodStep.caseId, prodStep.buildUrl(ctx), prodStep);
   fuzzCases.push(case1);
   const r1 = await executeOne(case1, {
     ...opts,
-    captureFullBody: Boolean(prodStep.extract),
+    captureFullBody: Boolean(prodStep.extract && prodStep.extract !== 'none'),
   });
   results.push(r1);
 
@@ -120,9 +128,28 @@ export async function executeStatefulChain(compiled, opts) {
   } else if (prodStep.extract === 'object_id') {
     const id = extractIdFromResource(parsed);
     if (id) ctx[compiled.viaParam] = id;
+  } else if (prodStep.extract === 'none') {
+    ctx[compiled.viaParam] = '1';
   }
 
-  if (!ctx[compiled.viaParam]) {
+  if (postToList) {
+    const st = r1.status != null ? Number(r1.status) : null;
+    if (st == null || st < 200 || st >= 300) {
+      results.push({
+        caseId: consStep.caseId,
+        family: 'CHAIN_SKIPPED',
+        method: consStep.method,
+        url: '',
+        status: null,
+        elapsedMs: 0,
+        headers: {},
+        bodyPreview: '',
+        bodyBytes: 0,
+        error: `bind_failed: POST producer returned ${st ?? 'null'} (expected 2xx before list GET)`,
+      });
+      return { ctx, results, fuzzCases, chainId: compiled.chainId };
+    }
+  } else if (!ctx[compiled.viaParam]) {
     results.push({
       caseId: consStep.caseId,
       family: 'CHAIN_SKIPPED',

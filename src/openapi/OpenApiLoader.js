@@ -1,11 +1,12 @@
 /**
  * OpenAPI 3.x ingestion — JSON or YAML → normalized operations list.
- * No external resolver: $ref left inline if small tools bundle; complex refs may need expansion later.
+ * Internal `#/components/...` refs are expanded before normalization; external URLs are not fetched.
  */
 
 import fs from 'fs';
 import path from 'path';
 import yaml from 'js-yaml';
+import { resolveInternalRefs } from './resolveInternalRefs.js';
 
 /**
  * @typedef {{
@@ -112,7 +113,8 @@ export function normalizeOpenApi(doc) {
  */
 export function loadOpenApi(filePath) {
   const raw = loadRawSpec(filePath);
-  return normalizeOpenApi(raw);
+  const resolved = resolveInternalRefs(raw);
+  return normalizeOpenApi(resolved);
 }
 
 const HTTP_METHODS = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'trace'];
@@ -157,7 +159,7 @@ function normalizeOperation(method, pathTemplate, op, pathItem, doc) {
   for (const raw of mergedParams) {
     if (!raw || typeof raw !== 'object') continue;
     const r = /** @type {Record<string, unknown>} */ (raw);
-    if ('$ref' in r) continue; // skip unresolved refs v0
+    if ('$ref' in r) continue; // unresolved external ref after internal resolution
     const name = typeof r.name === 'string' ? r.name : '';
     const inn = typeof r.in === 'string' ? r.in : 'query';
     if (!name || !['path', 'query', 'header', 'cookie'].includes(inn)) continue;

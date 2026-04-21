@@ -7,6 +7,10 @@
   "scripts": {
     "start": "node src/main.js",
     "mythos": "node src/main.js",
+    "validation:new": "node scripts/new-validation-run.mjs",
+    "validation:log": "node scripts/log-validation-run.mjs",
+    "validation:golden": "node scripts/validation-golden.mjs",
+    "test:triage": "node scripts/test-basic-triage.mjs",
     "test:scope-lab-agent": "node scripts/test-scope-lab-adapter.mjs",
     "test:plan": "node scripts/verify-plan.mjs",
     "test:openapi": "node scripts/test-openapi-load.mjs",
@@ -21,6 +25,9 @@
     "test:checker-engine": "node scripts/test-checker-engine.mjs",
     "test:body-mutations": "node scripts/test-body-mutations.mjs",
     "test:wordlist-expand": "node scripts/test-wordlist-expand.mjs",
+    "test:parent-swap": "node scripts/test-parent-swap-expand.mjs",
+    "test:parent-id-harvest": "node scripts/test-parent-id-harvest.mjs",
+    "test:pipeline-parent-harvest": "node scripts/test-pipeline-parent-harvest.mjs",
     "test:session-memory": "node scripts/test-session-memory.mjs",
     "test:namespace-overlap": "node scripts/test-namespace-overlap.mjs",
     "test:hierarchy-trivial": "node scripts/test-hierarchy-trivial.mjs",
@@ -31,7 +38,7 @@
     "mythos:worker": "node src/ops/worker.js",
     "test:scoped-chain": "node scripts/test-scoped-chain.mjs",
     "test:llm-e2e": "node scripts/test-llm-e2e.mjs",
-    "test": "npm run test:plan && npm run test:openapi && npm run test:graph && npm run test:chains && npm run test:scoped-chain && npm run test:llm-plan && npm run test:scope-policy && npm run test:milestone-d && npm run test:evidence-export && npm run test:stats-signals && npm run test:ai-advisor && npm run test:checker-engine && npm run test:body-mutations && npm run test:wordlist-expand && npm run test:session-memory && npm run test:namespace-overlap && npm run test:hierarchy-trivial && npm run test:milestone-e && npm run test:auth-refs && npm run test:milestone-g"
+    "test": "npm run test:plan && npm run test:openapi && npm run test:graph && npm run test:chains && npm run test:scoped-chain && npm run test:llm-plan && npm run test:scope-policy && npm run test:triage && npm run test:milestone-d && npm run test:evidence-export && npm run test:stats-signals && npm run test:ai-advisor && npm run test:checker-engine && npm run test:body-mutations && npm run test:wordlist-expand && npm run test:parent-swap && npm run test:parent-id-harvest && npm run test:pipeline-parent-harvest && npm run test:session-memory && npm run test:namespace-overlap && npm run test:hierarchy-trivial && npm run test:milestone-e && npm run test:auth-refs && npm run test:milestone-g"
   },
   "engines": {
     "node": ">=18"

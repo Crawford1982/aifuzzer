@@ -1,0 +1,15 @@
+openapi: 3.0.3
+info:
+  title: Juice Shop minimal REST slice
+  version: "1"
+servers:
+  - url: http://127.0.0.1:3000
+paths:
+  /api/Challenges:
+    get:
+      operationId: listChallenges
+      summary: Challenge list (public JSON)
+  /rest/user/whoami:
+    get:
+      operationId: whoami
+      summary: Current session identity

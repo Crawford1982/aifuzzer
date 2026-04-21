@@ -61,6 +61,19 @@ assert.ok(
 const bundle = buildReplayBundle(execResults, casesById, { generatedAt: gen, authHeader: 'secret' });
 assert.equal(bundle.format, 'mythos-replay-bundle');
 assert.equal(bundle.entryCount, 2);
+
+const dupBundle = buildReplayBundle([...execResults, execResults[0]], casesById, {
+  generatedAt: gen,
+  authHeader: 'secret',
+  dedupeReplayCurls: true,
+});
+assert.equal(dupBundle.entryCount, 2, 'duplicate curl rows dropped');
+
+const expandedMap = new Map(casesById);
+for (let i = 0; i < 12; i++) expandedMap.set(`cx${i}`, /** @type {any} */ (casesById.get('c1')));
+const manyRows = Array.from({ length: 12 }, (_, i) => ({ ...execResults[0], caseId: `cx${i}` }));
+const capped = buildReplayBundle(manyRows, expandedMap, { generatedAt: gen, maxReplayEntries: 5 });
+assert.equal(capped.entryCount, 5);
 assert.ok(bundle.entries[1].replayCurl?.includes('curl'));
 assert.equal(bundle.entries[1].request.headers.Authorization, '[redacted]');
 

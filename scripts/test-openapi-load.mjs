@@ -15,4 +15,8 @@ assert.equal(jsonSpec.operations.length >= 1, true);
 const yamlSpec = loadOpenApi(path.join(root, '../fixtures/minimal-posts.openapi.yaml'));
 assert.equal(yamlSpec.operations.length >= 1, true);
 
+const refSpec = loadOpenApi(path.join(root, '../fixtures/refs-parameters.openapi.yaml'));
+const getWidget = refSpec.operations.find((o) => o.operationId === 'getWidget');
+assert.ok(getWidget?.pathParamNames.includes('id'), '$ref parameter should resolve to path param id');
+
 console.log('openapi load (json+yaml): ok');

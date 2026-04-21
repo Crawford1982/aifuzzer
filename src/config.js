@@ -23,6 +23,7 @@ export function parseArgv(argv) {
     maxBodyMutationsPerOp: 0,
     authAlt: null,
     namespaceReplayBudget: 24,
+    namespaceReplayBudgetExplicit: false,
     useCuratedWordlist: false,
     campaignMemoryFile: null,
     authEnv: null,
@@ -54,7 +55,10 @@ export function parseArgv(argv) {
     else if (a === '--max-wordlist-injections') args.maxWordlistInjections = Number(argv[++i]);
     else if (a === '--max-body-mutations-per-op') args.maxBodyMutationsPerOp = Number(argv[++i]);
     else if (a === '--auth-alt') args.authAlt = argv[++i];
-    else if (a === '--namespace-replay-budget') args.namespaceReplayBudget = Number(argv[++i]);
+    else if (a === '--namespace-replay-budget') {
+      args.namespaceReplayBudget = Number(argv[++i]);
+      args.namespaceReplayBudgetExplicit = true;
+    }
     else if (a === '--curated-wordlist') args.useCuratedWordlist = true;
     else if (a === '--campaign-memory') args.campaignMemoryFile = argv[++i];
     else if (a === '--ci') args.ci = true;

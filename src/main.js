@@ -47,7 +47,7 @@ Checker oracles & bounded fuzz expansion (OpenAPI):
 
 Principal / campaign (OpenAPI + both auths — bounded, no vendor megawordlists):
   --auth-alt <token|header>       With --auth + --openapi: replay GETs with alternate Authorization (capped).
-  --namespace-replay-budget <n>   Max distinct URLs for alt-auth replay (default 24, hard cap 48).
+  --namespace-replay-budget <n>   Max distinct URLs for alt-auth replay (default 24; 40 when alternate principal is configured without this flag; hard cap 48).
   --curated-wordlist              Merge tiny in-repo ID slice (data/seclists-curated/ids-small.txt) under caps.
   --campaign-memory <path>        Load/merge/write bounded route stats JSON for the next run.
 
@@ -260,6 +260,14 @@ async function main() {
   } catch (e) {
     console.error((/** @type {Error} */ (e)).message || e);
     process.exit(1);
+  }
+
+  if (
+    resolvedAuthBundle.authAlt &&
+    !args.namespaceReplayBudgetExplicit &&
+    Number.isFinite(config.namespaceReplayBudget)
+  ) {
+    config.namespaceReplayBudget = 40;
   }
 
   /** @type {import('./safety/scopePolicy.js').ScopePolicy | null} */

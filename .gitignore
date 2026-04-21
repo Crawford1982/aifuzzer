@@ -1,6 +1,10 @@
 node_modules/
+.lab/
 .env
 output/
 *.log
 .mythos/
 .mythos-queue/
+
+# One-off benchmark run folders under data/validation-feedback/ (keep README, templates, playbooks)
+data/validation-feedback/20*/

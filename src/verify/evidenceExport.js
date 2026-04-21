@@ -60,19 +60,60 @@ function resultRow(r) {
 }
 
 /**
+ * Optional shrink for exported evidence (duplicate curls / tail cap).
+ *
+ * @param {unknown[]} execResults
+ * @param {Map<string, FuzzCase>} casesById
+ * @param {{
+ *   authHeader?: string | null,
+ *   dedupeReplayCurls?: boolean,
+ *   maxReplayEntries?: number,
+ * }} opts
+ */
+function pickEvidenceResults(execResults, casesById, opts) {
+  /** @type {unknown[]} */
+  let rows = execResults.slice();
+  if (opts.dedupeReplayCurls) {
+    const seen = new Set();
+    rows = rows.filter((raw) => {
+      const r = resultRow(raw);
+      const caseId = String(r.caseId || '');
+      const c = caseId ? casesById.get(caseId) : undefined;
+      const curl = c ? fuzzCaseToCurl(c, { authHeader: opts.authHeader ?? null }) : '';
+      if (!curl) return true;
+      if (seen.has(curl)) return false;
+      seen.add(curl);
+      return true;
+    });
+  }
+  const cap = opts.maxReplayEntries;
+  if (Number.isFinite(cap) && /** @type {number} */ (cap) > 0 && rows.length > cap) {
+    rows = rows.slice(-cap);
+  }
+  return rows;
+}
+
+/**
  * HAR 1.2 log object.
  *
  * @param {unknown[]} execResults
  * @param {Map<string, FuzzCase>} casesById
- * @param {{ generatedAt?: string, authHeader?: string | null }} opts
+ * @param {{
+ *   generatedAt?: string,
+ *   authHeader?: string | null,
+ *   dedupeReplayCurls?: boolean,
+ *   maxReplayEntries?: number,
+ * }} opts
  */
 export function buildHarLog(execResults, casesById, opts = {}) {
   const baseMs = opts.generatedAt ? Date.parse(opts.generatedAt) || Date.now() : Date.now();
   /** @type {unknown[]} */
   const entries = [];
 
-  for (let i = 0; i < execResults.length; i++) {
-    const r = resultRow(execResults[i]);
+  const source = pickEvidenceResults(execResults, casesById, opts);
+
+  for (let i = 0; i < source.length; i++) {
+    const r = resultRow(source[i]);
     const caseId = String(r.caseId || '');
     const c = caseId ? casesById.get(caseId) : undefined;
     const method = String(r.method || 'GET').toUpperCase();
@@ -185,14 +226,21 @@ export function buildHarLog(execResults, casesById, opts = {}) {
  *
  * @param {unknown[]} execResults
  * @param {Map<string, FuzzCase>} casesById
- * @param {{ generatedAt?: string, authHeader?: string | null }} opts
+ * @param {{
+ *   generatedAt?: string,
+ *   authHeader?: string | null,
+ *   dedupeReplayCurls?: boolean,
+ *   maxReplayEntries?: number,
+ * }} opts
  */
 export function buildReplayBundle(execResults, casesById, opts = {}) {
   /** @type {Array<Record<string, unknown>>} */
   const entries = [];
 
-  for (let i = 0; i < execResults.length; i++) {
-    const r = resultRow(execResults[i]);
+  const source = pickEvidenceResults(execResults, casesById, opts);
+
+  for (let i = 0; i < source.length; i++) {
+    const r = resultRow(source[i]);
     const caseId = String(r.caseId || '');
     const c = caseId ? casesById.get(caseId) : undefined;
     const curl = c ? fuzzCaseToCurl(c, { authHeader: opts.authHeader ?? null }) : null;

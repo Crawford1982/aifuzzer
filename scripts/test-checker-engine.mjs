@@ -3,7 +3,9 @@ import { strict as assert } from 'node:assert';
 import {
   checkLeakAfterFailedCreate,
   checkDeleteStillReadable,
+  checkBrokenCollectionListSibling,
   checkResourceHierarchyCrossParent,
+  checkNestedResourceHierarchyCrossParent,
   canonicalUrlForHierarchyCompare,
 } from '../src/verify/invariantCheckers.js';
 import { runCheckerPipeline } from '../src/verify/checkerEngine.js';
@@ -50,6 +52,26 @@ const delRows = [
 ];
 assert.ok(checkDeleteStillReadable(delRows).length >= 1);
 
+const siblingRows = [
+  {
+    caseId: 's1',
+    method: 'GET',
+    url: 'https://x.test/workshop/api/shop/orders',
+    status: 500,
+    bodyPreview: '',
+    family: 'X',
+  },
+  {
+    caseId: 's2',
+    method: 'GET',
+    url: 'https://x.test/workshop/api/shop/orders/all',
+    status: 200,
+    bodyPreview: '[]',
+    family: 'X',
+  },
+];
+assert.ok(checkBrokenCollectionListSibling(siblingRows).some((x) => x.checkerId === 'broken_collection_list_path'));
+
 const hierRows = [
   {
     caseId: 'h1',
@@ -69,6 +91,32 @@ const hierRows = [
   },
 ];
 assert.ok(checkResourceHierarchyCrossParent(hierRows).length >= 1);
+
+const nestedHierBody = JSON.stringify({ note: 'nested-bola', x: 'y'.repeat(40) });
+const nestedHierRows = [
+  {
+    caseId: 'n1',
+    method: 'GET',
+    url: 'https://x.test/posts/1/comments/50',
+    status: 200,
+    bodyPreview: nestedHierBody,
+    family: 'Y',
+  },
+  {
+    caseId: 'n2',
+    method: 'GET',
+    url: 'https://x.test/posts/99/comments/50',
+    status: 200,
+    bodyPreview: nestedHierBody,
+    family: 'Y',
+  },
+];
+assert.ok(
+  checkNestedResourceHierarchyCrossParent(nestedHierRows).some(
+    (x) => x.checkerId === 'nested_resource_hierarchy_cross_parent'
+  )
+);
+assert.equal(checkResourceHierarchyCrossParent(nestedHierRows).length, 0, 'nested routes excluded from flat hierarchy checker');
 
 // Hierarchy FP guard: same pathname + body, only fuzzer probe query differs (debug / trace / etc.)
 const longBody = JSON.stringify({ payload: 'z'.repeat(120), id: 1 });
@@ -127,6 +175,6 @@ assert.equal(
 
 const fired = runCheckerPipeline(leakRows, { evidenceHarPath: '/tmp/x.har' });
 assert.ok(fired.some((x) => x.kind === 'checker'));
-assert.ok(MYTHOS_CHECKERS.length >= 3);
+assert.ok(MYTHOS_CHECKERS.length >= 6);
 
 console.log('checker engine ok');

@@ -1,0 +1,7 @@
+allowHosts:
+  - 127.0.0.1
+  - localhost
+pathPrefixes:
+  - /
+schemes:
+  - http

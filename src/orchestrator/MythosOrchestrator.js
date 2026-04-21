@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 
 import { buildSessionSummary, mergeCampaignMemory } from '../campaign/sessionMemory.js';
 import { harvestIdsFromResults } from '../feedback/idHarvest.js';
+import { harvestParentIdsByCollection } from '../feedback/parentIdHarvest.js';
 import { prioritizeCases } from '../feedback/casePrioritizer.js';
 
 import { probeRestSurface } from '../surface/RestSurfaceProbe.js';
@@ -303,6 +304,20 @@ export async function runMythosPipeline(cfg) {
       }
     }
 
+    /** Keys = lowercase collection base path (`collectionBaseForNestedOp` ↔ list GET pathname). */
+    let liveParentIdsByCollection = /** @type {Record<string, string[]>} */ ({});
+    if (earlyResults.length) {
+      liveParentIdsByCollection = harvestParentIdsByCollection(earlyResults, {
+        maxPerKey: 16,
+        maxIdsTotal: 96,
+      });
+      const nk = Object.keys(liveParentIdsByCollection).length;
+      const nt = Object.values(liveParentIdsByCollection).reduce((a, xs) => a + xs.length, 0);
+      if (nk) {
+        model.observe({ kind: 'parent_id_harvest', collections: nk, ids: nt });
+      }
+    }
+
     /** @type {import('../hypothesis/HypothesisEngine.js').FuzzCase[]} */
     let aiHintCases = [];
     if (cfg.aiMutationHints && aiReserve > 0) {
@@ -332,6 +347,8 @@ export async function runMythosPipeline(cfg) {
       wordlistValues: wordlistLines.length ? wordlistLines : undefined,
       maxWordlistInjections: cfg.maxWordlistInjections ?? 64,
       maxBodyMutationsPerOp: cfg.maxBodyMutationsPerOp ?? 0,
+      liveParentIdsByCollection:
+        Object.keys(liveParentIdsByCollection).length > 0 ? liveParentIdsByCollection : undefined,
     });
 
     // Milestone G — case prioritization: rank by campaign memory + route novelty
@@ -477,14 +494,14 @@ export async function runMythosPipeline(cfg) {
   if (cfg.evidencePack) {
     const harPath = path.join(outDir, `mythos-evidence-${ts}.har`);
     const replayPath = path.join(outDir, `mythos-replay-${ts}.json`);
-    const har = buildHarLog(execResults, casesById, {
+    const evShrink = {
       generatedAt,
       authHeader: cfg.auth ?? null,
-    });
-    const bundle = buildReplayBundle(execResults, casesById, {
-      generatedAt,
-      authHeader: cfg.auth ?? null,
-    });
+      dedupeReplayCurls: true,
+      maxReplayEntries: 120,
+    };
+    const har = buildHarLog(execResults, casesById, evShrink);
+    const bundle = buildReplayBundle(execResults, casesById, evShrink);
     fs.writeFileSync(harPath, JSON.stringify(har, null, 2));
     fs.writeFileSync(replayPath, JSON.stringify(bundle, null, 2));
     evidencePack = { har: harPath, replay: replayPath };

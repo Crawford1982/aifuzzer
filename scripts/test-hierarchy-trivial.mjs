@@ -2,6 +2,7 @@
 import { strict as assert } from 'node:assert';
 import {
   checkResourceHierarchyCrossParent,
+  checkNestedResourceHierarchyCrossParent,
   isTrivialPublicPayload,
 } from '../src/verify/invariantCheckers.js';
 
@@ -34,6 +35,25 @@ const hierRows = [
   },
 ];
 assert.ok(checkResourceHierarchyCrossParent(hierRows).length >= 1);
+
+const nestedBody = '{"k":1,"p":"' + 'z'.repeat(80) + '"}';
+const nestedHierarchy = [
+  {
+    caseId: 'n1',
+    method: 'GET',
+    url: 'https://x.test/a/1/b/2/c',
+    status: 200,
+    bodyPreview: nestedBody,
+  },
+  {
+    caseId: 'n2',
+    method: 'GET',
+    url: 'https://x.test/a/9/b/2/c',
+    status: 200,
+    bodyPreview: nestedBody,
+  },
+];
+assert.ok(checkNestedResourceHierarchyCrossParent(nestedHierarchy).length >= 1);
 
 const trivialHierarchy = [
   {

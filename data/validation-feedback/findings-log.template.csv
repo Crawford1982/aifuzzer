@@ -1,0 +1,3 @@
+id,target,run_id,vuln_expected,endpoint_or_operation,tool_finding,status,severity,evidence_path,actionable,notes
+1,dvga,YYYYMMDD-HHMMSS-<label>,IDOR,GET /api/posts/{id},Unauthorized object access on alternate auth,TP,high,output/mythos-report-<timestamp>.json,yes,Confirmed with replayCurl
+2,dvga,YYYYMMDD-HHMMSS-<label>,GraphQL Introspection,POST /graphql,Schema disclosure via introspection,N/A,low,output/mythos-report-<timestamp>.json,partly,Expected in training environment

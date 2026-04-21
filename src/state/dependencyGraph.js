@@ -11,6 +11,7 @@
  *   kind:
  *     | 'list_to_item'
  *     | 'post_to_item'
+ *     | 'post_to_list_get'
  *     | 'list_to_scoped_subresource'
  *     | 'post_to_scoped_subresource'
  *     | 'item_to_scoped_subresource',
@@ -129,6 +130,22 @@ export function inferProducerConsumerEdges(operations) {
           consumerId: item.operationId,
           viaParam: via,
           kind: 'post_to_item',
+        });
+      }
+    }
+  }
+
+  /** POST create on collection → GET list at same path or …/all (crAPI-style). */
+  for (const post of collectionPosts) {
+    const postKey = normalizePathKey(post.pathTemplate);
+    for (const list of listGets) {
+      const listKey = normalizePathKey(list.pathTemplate);
+      if (listKey === postKey || listKey === `${postKey}/all`) {
+        edges.push({
+          producerId: post.operationId,
+          consumerId: list.operationId,
+          viaParam: '_sequence',
+          kind: 'post_to_list_get',
         });
       }
     }

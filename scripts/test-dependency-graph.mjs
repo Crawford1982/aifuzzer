@@ -23,4 +23,11 @@ assert.ok(itemScoped, 'expected GET item→scoped sub-resource edge');
 
 assert.ok(edges.length >= 5, 'fixture should yield flat + nested edges');
 
+const crapi = loadOpenApi(path.join(root, '../fixtures/crapi-minimal.openapi.yaml'));
+const crapiEdges = inferProducerConsumerEdges(crapi.operations).edges;
+const postList = crapiEdges.find(
+  (e) => e.kind === 'post_to_list_get' && e.producerId === 'placeShopOrder' && e.consumerId === 'listOrdersAll'
+);
+assert.ok(postList, 'expected POST shop/orders → GET …/orders/all');
+
 console.log('dependency graph:', edges.length, 'edges — ok');

@@ -1,0 +1,19 @@
+openapi: 3.0.3
+info:
+  title: Internal refs fixture
+  version: "1"
+paths:
+  /widgets/{id}:
+    get:
+      operationId: getWidget
+      summary: Resolve path param via components/parameters ref
+      parameters:
+        - $ref: "#/components/parameters/WidgetId"
+components:
+  parameters:
+    WidgetId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string

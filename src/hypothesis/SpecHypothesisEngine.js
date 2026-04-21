@@ -100,12 +100,102 @@ export function buildSchemaBodyMutationVariants(schemaRoot, max) {
 
 const ID_LIKE = /(^|_)(id|Id|ID|uuid|UUID|pk|Pk|key|Key)($|_)/;
 
+/** Max parent-swap variants per nested op (live harvest + schema alts, deduped). */
+const PARENT_SWAP_TOTAL_CAP = 4;
+
+/** Candidates produced by schema-aware fallback (subset merged into {@link PARENT_SWAP_TOTAL_CAP}). */
+const SCHEMA_PARENT_SWAP_POOL = 2;
+
 /**
  * @param {import('../openapi/OpenApiLoader.js').NormalizedOperation} op
  * @param {string} paramName
  */
 function isIdLikeParam(paramName) {
   return ID_LIKE.test(paramName) || /^[a-zA-Z]*[iI]d$/.test(paramName);
+}
+
+/**
+ * `{name}` segments in path template order (stable parent → child ordering for nested routes).
+ *
+ * @param {import('../openapi/OpenApiLoader.js').NormalizedOperation} op
+ */
+function pathParamNamesInTemplateOrder(op) {
+  /** @type {string[]} */
+  const names = [];
+  const re = /\{([^}]+)\}/g;
+  let m;
+  while ((m = re.exec(op.pathTemplate))) names.push(m[1]);
+  return names.filter((n) => op.pathParamNames.includes(n));
+}
+
+/**
+ * Bounded alternative values for the **parent** path segment on nested routes — follows param schema
+ * (`integer`, `uuid`, etc.) instead of a single generic wordlist.
+ *
+ * @param {Record<string, unknown> | undefined} schema
+ * @returns {string[]}
+ */
+export function schemaAwareParentSwapAlts(schema) {
+  const baseline =
+    schema && typeof schema === 'object' ? String(pickExampleValue(schema)) : '1';
+
+  /** @type {string[]} */
+  const out = [];
+
+  if (!schema || typeof schema !== 'object') {
+    out.push('99999');
+    if (out.length < SCHEMA_PARENT_SWAP_POOL) out.push('2');
+    return out.slice(0, SCHEMA_PARENT_SWAP_POOL);
+  }
+
+  const s = /** @type {Record<string, unknown>} */ (schema);
+  const fmt = s.format;
+  const t = s.type;
+
+  if (fmt === 'uuid') {
+    const u = '00000000-0000-0000-0000-000000000099';
+    if (u !== baseline) out.push(u);
+    const v = 'ffffffff-ffff-ffff-ffff-ffffffffffff';
+    if (out.length < SCHEMA_PARENT_SWAP_POOL && v !== baseline && !out.includes(v)) out.push(v);
+    return out.slice(0, SCHEMA_PARENT_SWAP_POOL);
+  }
+
+  if (t === 'integer' || t === 'number') {
+    const candidates = [99999, 2, 888];
+    for (const n of candidates) {
+      const sv = String(n);
+      if (sv === baseline) continue;
+      out.push(sv);
+      if (out.length >= SCHEMA_PARENT_SWAP_POOL) break;
+    }
+    return out.slice(0, SCHEMA_PARENT_SWAP_POOL);
+  }
+
+  const strCandidates = ['swap-a', '__mythos_alt__', '99999'];
+  for (const c of strCandidates) {
+    if (c === baseline) continue;
+    out.push(c);
+    if (out.length >= SCHEMA_PARENT_SWAP_POOL) break;
+  }
+  return out.slice(0, SCHEMA_PARENT_SWAP_POOL);
+}
+
+/**
+ * Static path prefix before the first `{param}` — maps nested routes to collection list harvest keys.
+ * E.g. `/posts/{postId}/comments/{commentId}` → `/posts`
+ *
+ * @param {string} pathTemplate
+ */
+export function collectionBaseForNestedOp(pathTemplate) {
+  const raw = pathTemplate.split('/').filter(Boolean);
+  for (let i = 0; i < raw.length; i++) {
+    const seg = raw[i];
+    if (seg.startsWith('{') && seg.endsWith('}')) {
+      if (i === 0) return '/';
+      return `/${raw.slice(0, i).join('/')}`;
+    }
+  }
+  return '';
 }
 
 const ID_ALT = [1, 2, 99, 1000, '00000000-0000-0000-0000-000000000002'];
@@ -194,6 +284,7 @@ function defaultPathValues(op) {
  *   wordlistValues?: string[],
  *   maxWordlistInjections?: number,
  *   maxBodyMutationsPerOp?: number,
+ *   liveParentIdsByCollection?: Record<string, string[]>,
  * }} opts
  * @returns {FuzzCase[]}
  */
@@ -220,6 +311,67 @@ export function expandFromOpenApi(spec, baseUrl, opts) {
       family: 'OPENAPI_BASELINE',
       meta: baseReq.meta,
     });
+
+    // Nested routes: swap first id-like path param (parent) — prefer live list harvest, then schema alts.
+    const idLikeTplOrder = pathParamNamesInTemplateOrder(op).filter(isIdLikeParam);
+    if (idLikeTplOrder.length >= 2 && !cap()) {
+      const parentName = idLikeTplOrder[0];
+      const childName = idLikeTplOrder[1];
+      const parentDef = op.parameters.find((x) => x.name === parentName && x.in === 'path');
+
+      const collKey = collectionBaseForNestedOp(op.pathTemplate).toLowerCase();
+      const harvestPool =
+        opts.liveParentIdsByCollection?.[collKey]?.filter((id) => id !== pathVals[parentName]) ?? [];
+
+      const staticAlts = schemaAwareParentSwapAlts(
+        /** @type {Record<string, unknown> | undefined} */ (
+          parentDef?.schema && typeof parentDef.schema === 'object'
+            ? /** @type {Record<string, unknown>} */ (parentDef.schema)
+            : undefined
+        )
+      ).filter((a) => a !== pathVals[parentName]);
+
+      /** @type {{ alt: string, source: 'harvest' | 'schema' }[]} */
+      const planned = [];
+      const seenAlt = new Set();
+      for (const alt of harvestPool) {
+        if (planned.length >= PARENT_SWAP_TOTAL_CAP) break;
+        if (seenAlt.has(alt)) continue;
+        seenAlt.add(alt);
+        planned.push({ alt, source: 'harvest' });
+      }
+      for (const alt of staticAlts) {
+        if (planned.length >= PARENT_SWAP_TOTAL_CAP) break;
+        if (seenAlt.has(alt)) continue;
+        seenAlt.add(alt);
+        planned.push({ alt, source: 'schema' });
+      }
+
+      for (const { alt, source } of planned) {
+        if (cap()) break;
+        const pv = { ...pathVals, [parentName]: alt };
+        const r = buildRequest({ baseUrl, operation: op, pathValues: pv });
+        const cid =
+          source === 'harvest'
+            ? `spec:${op.operationId}:parent_swap_harvest:${parentName}:${alt}`
+            : `spec:${op.operationId}:parent_swap:${parentName}:${alt}`;
+        cases.push({
+          id: cid,
+          method: op.method,
+          url: r.url,
+          headers: r.headers || {},
+          family: 'OPENAPI_PARENT_SWAP',
+          meta: {
+            ...(r.meta || {}),
+            parentSwap: true,
+            parentPathParam: parentName,
+            nestedChildPathParam: childName,
+            parentSwapSource: source,
+            parentCollectionKey: collKey,
+          },
+        });
+      }
+    }
 
     // ID-like path mutations (BOLA / IDOR hints)
     for (const pname of op.pathParamNames) {

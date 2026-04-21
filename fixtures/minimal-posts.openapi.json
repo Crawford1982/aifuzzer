@@ -88,6 +88,26 @@
           }
         ]
       }
+    },
+    "/posts/{postId}/comments/{commentId}": {
+      "get": {
+        "operationId": "getPostCommentNested",
+        "summary": "Nested comment (two path params — parent_swap / nested BOLA)",
+        "parameters": [
+          {
+            "name": "postId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "example": 1 }
+          },
+          {
+            "name": "commentId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "example": 5 }
+          }
+        ]
+      }
     }
   }
 }

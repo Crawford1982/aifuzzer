@@ -73,4 +73,46 @@ assert.match(String(out.results[0].url), /\/posts$/);
 assert.equal(out.results[1].status, 200);
 assert.ok(String(out.results[1].url).includes('/posts/101'));
 
+function installFetchMockPostToList() {
+  /** @type {typeof fetch} */
+  const mockFetch = async (input, init) => {
+    const raw = typeof input === 'string' ? input : input.url;
+    const url = new URL(raw);
+    const method = (init?.method || 'GET').toUpperCase();
+
+    if (method === 'POST' && url.pathname.endsWith('/shop/orders')) {
+      return jsonResponse(200, { id: 7, ok: true });
+    }
+    if (method === 'GET' && url.pathname.endsWith('/shop/orders/all')) {
+      return jsonResponse(200, [{ id: 7 }]);
+    }
+    return jsonResponse(404, { error: 'unexpected in post_to_list test', url: raw, method });
+  };
+
+  globalThis.fetch = mockFetch;
+}
+
+installFetchMockPostToList();
+
+const crapiSpec = loadOpenApi(path.join(root, '../fixtures/crapi-minimal.openapi.yaml'));
+const graph2 = inferProducerConsumerEdges(crapiSpec.operations);
+const plEdge = graph2.edges.find(
+  (e) => e.kind === 'post_to_list_get' && e.producerId === 'placeShopOrder'
+);
+assert.ok(plEdge, 'expected post_to_list_get edge for crAPI fixture');
+
+const chains2 = buildStatefulChains(crapiSpec, graph2, { maxChains: 50 });
+const plChain = chains2.find((c) => c.edge.kind === 'post_to_list_get');
+assert.ok(plChain, 'stateful chain for post_to_list_get');
+
+const byId2 = new Map(crapiSpec.operations.map((o) => [o.operationId, o]));
+const compiled2 = compileStatefulChain(/** @type {any} */ (plChain), byId2, base);
+const out2 = await executeStatefulChain(compiled2, { timeoutMs: 5000, authHeader: null });
+
+assert.equal(out2.results.length, 2);
+assert.equal(out2.results[0].status, 200);
+const listUrl = new URL(String(out2.results[1].url));
+assert.match(listUrl.pathname, /\/orders\/all$/);
+
 console.log('stateful chain (post_to_item, mocked fetch): ok');
+console.log('stateful chain (post_to_list_get, mocked fetch): ok');

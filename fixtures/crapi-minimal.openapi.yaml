@@ -1,0 +1,57 @@
+openapi: 3.0.3
+info:
+  title: crAPI minimal REST slice (paths from upstream Postman collection)
+  version: "1"
+servers:
+  - url: http://127.0.0.1:8888
+paths:
+  /workshop/api/shop/products:
+    get:
+      operationId: listProducts
+      summary: Product catalog (public slice)
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          schema:
+            type: integer
+  # Note: bare GET /workshop/api/shop/orders can return 500 on some crAPI builds.
+  # Postman “Get orders” uses /orders/all — align with working route.
+  /workshop/api/shop/orders:
+    post:
+      operationId: placeShopOrder
+      summary: Place order (happy path — drives workshop state for GET list)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                product_id:
+                  type: integer
+                quantity:
+                  type: integer
+              required:
+                - product_id
+                - quantity
+  /workshop/api/shop/orders/all:
+    get:
+      operationId: listOrdersAll
+      summary: Authenticated order list (limit/offset per Postman)
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          schema:
+            type: integer
+  /identity/api/v2/vehicle/vehicles:
+    get:
+      operationId: listVehicles
+      summary: User vehicles (typically auth-required)

@@ -32,10 +32,26 @@ export const MYTHOS_CHECKERS = [
     bountyTierHint: 'medium',
   },
   {
+    checkerId: 'broken_collection_list_path',
+    title: 'Bare collection route errors while sibling …/all list succeeds',
+    precondition:
+      'Two GET requests share the same logical collection (same path with one using an `/all` list suffix); one returned 5xx and the other 200.',
+    owaspMapping: ['API8:2023'],
+    bountyTierHint: 'low',
+  },
+  {
     checkerId: 'resource_hierarchy_cross_parent',
     title: 'Same response body across different parent contexts (possible BOLA)',
     precondition:
       'Two GETs to the same route shape (normalized path template) with different parent IDs both returned 200 with identical normalized body fingerprints.',
+    owaspMapping: ['API1:2023'],
+    bountyTierHint: 'high',
+  },
+  {
+    checkerId: 'nested_resource_hierarchy_cross_parent',
+    title: 'Nested route: identical bodies across different parents (possible BOLA)',
+    precondition:
+      'Same as hierarchy cross-parent, but the path template has two or more dynamic `{id}`/`{uuid}` segments (nested resource shape).',
     owaspMapping: ['API1:2023'],
     bountyTierHint: 'high',
   },
