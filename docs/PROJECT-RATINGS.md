@@ -33,3 +33,5 @@ Subjective scorecard for this **framework-shaped API fuzzer core** — useful fo
 - Raise **depth**: richer OpenAPI fidelity (external refs where safe), tighter request/response pairing for oracles.
 
 Related: **`docs/MILESTONES.md`**, **`docs/REST-LEVEL-UP-PLAN.md`**, **`docs/TESTING.md`**.
+
+Independent perspective + **errata** (e.g. what is actually shipped vs assumed): **`docs/EXTERNAL-ANALYSIS-SYNTHESIS.md`**.

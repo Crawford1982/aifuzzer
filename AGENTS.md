@@ -34,3 +34,4 @@ Prefer **“typed plan” / “execution plan”** over vendor framework names. 
 - Confirming **`findings[]`** vs ground truth (replay, TP/FP/FN): **`docs/VALIDATION-TRIAGE.md`**.
 - REST depth roadmap (GraphQL excluded): **`docs/REST-LEVEL-UP-PLAN.md`**.
 - Subjective project scorecard (engineering / tests / findings leverage): **`docs/PROJECT-RATINGS.md`**.
+- Third-party analysis with **errata** (avoid stale claims on `$ref` / tests): **`docs/EXTERNAL-ANALYSIS-SYNTHESIS.md`**.

@@ -70,4 +70,4 @@ Run individual scripts with **`npm run test:<name>`** (see **`package.json`** `s
 
 ## Quality bar (subjective)
 
-For a frank assessment of strengths and gaps (engineering vs signal vs OWASP breadth), see **`docs/PROJECT-RATINGS.md`**.
+For a frank assessment of strengths and gaps (engineering vs signal vs OWASP breadth), see **`docs/PROJECT-RATINGS.md`**. An independent review with **errata** (e.g. internal vs external `$ref`, test assertions): **`docs/EXTERNAL-ANALYSIS-SYNTHESIS.md`**.

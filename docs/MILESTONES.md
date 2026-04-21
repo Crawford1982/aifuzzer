@@ -2,7 +2,7 @@
 
 Single source of truth for **delivery phases** and **exit criteria**. Implementation details live in code; this file tracks **what “done” means**.
 
-**Tests (regression):** `npm test` — see `package.json` (offline; no API keys). **A–G** on `main` are expected to pass. **F** adds `test:checker-engine`, `test:body-mutations`, `test:wordlist-expand`. **E** adds `test:milestone-e`, **`test:auth-refs`**. **G** adds **`test:milestone-g`** (feedback loops). Optional live LLM: `MYTHOS_E2E_LLM=1 npm run test:llm-e2e`.
+**Tests (regression):** `npm test` — see `package.json` (offline; no API keys). **A–H** core suites on `main` are expected to pass (through **`test:milestone-h`**). **G** adds **`test:milestone-g`** (feedback loops); **H** adds **`test:milestone-h`** (OWASP checker trio). Optional live LLM: `MYTHOS_E2E_LLM=1 npm run test:llm-e2e`.
 
 ---
 
@@ -34,7 +34,7 @@ Single source of truth for **delivery phases** and **exit criteria**. Implementa
 
 **Artifacts:** `src/state/`, `src/hypothesis/StatefulCampaignEngine.js`, `src/execution/SequenceExecutor.js`.
 
-**Nested sub-resources (incremental):** `list_to_scoped_subresource`, `post_to_scoped_subresource`, `item_to_scoped_subresource` edges for paths like `/posts/{id}/comments` (see `dependencyGraph.js`). Still **non-goals:** auth-scoped handle stores, full `$ref` expansion, >2-hop chains in one compile.
+**Nested sub-resources (incremental):** `list_to_scoped_subresource`, `post_to_scoped_subresource`, `item_to_scoped_subresource` edges for paths like `/posts/{id}/comments` (see `dependencyGraph.js`). Still **non-goals:** auth-scoped handle stores, **cross-file `$ref`** fetch/bundle resolution (internal `#/` refs resolved — **`src/openapi/resolveInternalRefs.js`**), >2-hop chains in one compile.
 
 ---
 
@@ -161,16 +161,17 @@ Single source of truth for **delivery phases** and **exit criteria**. Implementa
 
 ---
 
-## Milestone J — Spec fidelity (`$ref` resolution)
+## Milestone J — Spec fidelity (**remaining:** external / cross-file `$ref`)
 
-**Goal:** Real-world OpenAPI specs (Dynatrace, enterprise APIs) use `$ref` extensively; silently skipping them leaves parameters and body schemas empty.
+**Shipped (do not regress):** Internal **`#/components/…`** JSON Pointer refs are inlined before **`normalizeOpenApi`** via **`src/openapi/resolveInternalRefs.js`** (`loadOpenApi`). **`fixtures/refs-parameters.openapi.yaml`** + **`npm run test:openapi`** lock behavior. Transparent to **`NormalizedOperation`** consumers.
+
+**Goal:** Enterprise bundles often reference **other files** or URLs — resolve or degrade predictably without breaking runs.
 
 **Done when:**
 
-- [ ] **Local `$ref` resolution** in `src/openapi/OpenApiLoader.js` — resolve `#/components/schemas/…` and `#/components/parameters/…` refs inline during normalization.
-- [ ] External / cross-file `$ref`s skipped gracefully with an observation log entry (not thrown).
-- [ ] Existing `test:openapi` fixture updated with a `$ref`-using spec; test confirms parameters are resolved.
-- [ ] No changes to `NormalizedOperation` or `NormalizedSpec` types — resolution is transparent to all downstream consumers.
+- [ ] **Relative / cross-file `$ref`** — resolve same-directory / bundle-relative **`./foo.yaml`** refs when present; cap depth and breadth.
+- [ ] **Remote `$ref` URLs** — optional strict opt-in (`MYTHOS_OPENAPI_FETCH_REFS=1` or CLI flag); otherwise **skip** with **`semanticSnapshot`** observation (**`openapi_ref_external_skipped`**) listing reason.
+- [ ] **Unresolved ref** leaves parameters/request bodies usable where partial; never throw solely for skipped external ref during load.
 
 ---
 

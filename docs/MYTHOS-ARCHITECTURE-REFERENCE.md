@@ -72,7 +72,7 @@ That means, without you hand-writing endpoints or payloads:
 | Verification | Provable | **Checker pipeline**, heuristic triage, stats, confidence — per-row **`replayCurl`**. |
 | Tests | CI | **`npm test`** through **Milestone G** (`test:milestone-g`), no network by default; plus **`test:milestone-e`**, auth refs, checker engine. |
 
-**Bottom line:** The **engine and proof plumbing** (spec, graph, bind, validate plan, execute, replay, feedback reranking, report observations) are in place. Planned next steps: **`docs/MILESTONES.md`** Milestones **H–L** (checkers, LLM response analyst, `$ref`, richer mutations, two-pass campaigns).
+**Bottom line:** The **engine and proof plumbing** (spec, graph, bind, validate plan, execute, replay, feedback reranking, report observations) are in place. **Milestone H** checkers shipped; internal **`#/` `$ref`** resolved at load (**`resolveInternalRefs.js`**). Planned next steps: **`docs/MILESTONES.md`** (**J** remainder: external `$ref`, **I** response analyst, **K–L** mutations/campaigns).
 
 ---
 
