@@ -67,3 +67,7 @@ Run individual scripts with **`npm run test:<name>`** (see **`package.json`** `s
 1. Re-run the failing script alone: **`npm run test:<name>`**.
 2. For OpenAPI/harvest regressions, inspect **`src/feedback/parentIdHarvest.js`**, **`src/hypothesis/SpecHypothesisEngine.js`**, **`src/orchestrator/MythosOrchestrator.js`**.
 3. See **`docs/REST-LEVEL-UP-PLAN.md`** for REST roadmap context and **`docs/VALIDATION-TRIAGE.md`** for lab triage workflow.
+
+## Quality bar (subjective)
+
+For a frank assessment of strengths and gaps (engineering vs signal vs OWASP breadth), see **`docs/PROJECT-RATINGS.md`**.

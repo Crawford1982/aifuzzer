@@ -33,3 +33,4 @@ Prefer **“typed plan” / “execution plan”** over vendor framework names. 
 - Rolling run index: **`data/validation-feedback/SESSION-LOG.md`** (`npm run validation:log`). Narrative expectations: **`docs/VALIDATION-BENCHMARKS.md`**.
 - Confirming **`findings[]`** vs ground truth (replay, TP/FP/FN): **`docs/VALIDATION-TRIAGE.md`**.
 - REST depth roadmap (GraphQL excluded): **`docs/REST-LEVEL-UP-PLAN.md`**.
+- Subjective project scorecard (engineering / tests / findings leverage): **`docs/PROJECT-RATINGS.md`**.

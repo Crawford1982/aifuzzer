@@ -129,7 +129,7 @@ Use intentionally vulnerable apps (DVGA, crAPI, Juice Shop) or safe demos (**jso
 - **`npm run validation:new -- --target dvga --label baseline`** — new folder under `data/validation-feedback/<run-id>/` with `run.md` + `findings.csv` templates.
 - **`npm run validation:log`** — append one row to **`data/validation-feedback/SESSION-LOG.md`** from the latest `output/mythos-report-*.json` (or pass a specific report path after `--`).
 
-Playbooks: **`data/validation-feedback/target-playbooks/`**. Expectations and dummy targets: **`docs/VALIDATION-BENCHMARKS.md`**. **Triage workflow (replay, TP/FP/FN):** **`docs/VALIDATION-TRIAGE.md`**. **REST roadmap (non-GraphQL):** **`docs/REST-LEVEL-UP-PLAN.md`**.
+Playbooks: **`data/validation-feedback/target-playbooks/`**. Expectations and dummy targets: **`docs/VALIDATION-BENCHMARKS.md`**. **Triage workflow (replay, TP/FP/FN):** **`docs/VALIDATION-TRIAGE.md`**. **REST roadmap (non-GraphQL):** **`docs/REST-LEVEL-UP-PLAN.md`**. **Where we stand (subjective ratings):** **`docs/PROJECT-RATINGS.md`**.
 
 ## Repo layout
 
@@ -152,10 +152,12 @@ data/            # bounty-signals.json, owasp mapping, curated wordlist slice
 docs/
   ARCHITECTURE.md
   ROADMAP.md
-  MILESTONES.md          # through Milestone G (shipped); H–L planned — exit criteria only
-  VALIDATION-BENCHMARKS.md  # lab logging, expected findings vs offline tests
+  MILESTONES.md             # milestone exit criteria + shipped checklist
+  PROJECT-RATINGS.md       # subjective scorecard — engineering vs signal vs OWASP breadth
+  VALIDATION-BENCHMARKS.md # lab logging, expected findings vs offline tests
   VALIDATION-TRIAGE.md      # replay-based TP/FP/FN — confirming findings without new features
   REST-LEVEL-UP-PLAN.md     # REST/OpenAPI/auth depth — phased roadmap
+  TESTING.md                # npm scripts matrix, CI, feature ↔ test mapping
 ```
 
 
