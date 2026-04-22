@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node src/main.js",
     "mythos": "node src/main.js",
+    "launcher": "node scripts/mythos-launcher.mjs",
     "validation:new": "node scripts/new-validation-run.mjs",
     "validation:log": "node scripts/log-validation-run.mjs",
     "validation:golden": "node scripts/validation-golden.mjs",
